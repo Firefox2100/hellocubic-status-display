@@ -34,6 +34,16 @@ static constexpr int MAX_CONNECTION_ATTEMPTS = 20;
 static constexpr uint32_t CONNECTION_DELAY_MS = 500;
 
 /**
+ * @brief How often the access-point fallback tries the saved network again (a try takes the radio off the setup AP)
+ */
+static constexpr uint32_t AP_RETRY_INTERVAL_MS = 5UL * 60UL * 1000UL;
+
+/**
+ * @brief How long one retry round waits for the saved network before giving up
+ */
+static constexpr uint32_t AP_RETRY_TIMEOUT_MS = 15000;
+
+/**
  * @brief WifiManager constructor
  *
  * @param staSsid The SSID for the WiFi station mode
@@ -130,6 +140,46 @@ auto WiFiManager::connectToNetwork(const char* ssid, const char* pass, uint32_t 
     BootScreen::showSetup(_apSsid, _apPass, ssid);
 
     return false;
+}
+
+void WiFiManager::loop() {
+    if (!_apMode || _staSsid == nullptr || _staSsid[0] == '\0') {
+        return;
+    }
+    const uint32_t now = millis();
+
+    if (_retrying) {
+        if (WiFi.status() == WL_CONNECTED) {
+            WiFi.softAPdisconnect(true);
+            WiFi.mode(WIFI_STA);
+            _apMode = false;
+            _retrying = false;
+            Logger::warn("Saved Wi-Fi is back: left setup mode", "WiFiManager");
+
+            return;
+        }
+        // Someone joined the setup access point meanwhile, or the network is not there: end this round
+        if (WiFi.softAPgetStationNum() > 0 || (now - _retryStartMs) >= AP_RETRY_TIMEOUT_MS) {
+            WiFi.disconnect();
+            WiFi.mode(WIFI_AP);
+            _retrying = false;
+            _lastRetryMs = now;
+        }
+
+        return;
+    }
+
+    if ((now - _lastRetryMs) < AP_RETRY_INTERVAL_MS) {
+        return;
+    }
+    _lastRetryMs = now;
+    if (WiFi.softAPgetStationNum() > 0) {
+        return;  // someone is using the setup access point: do not switch the radio away from it
+    }
+    _retrying = true;
+    _retryStartMs = now;
+    WiFi.mode(WIFI_AP_STA);  // keep the access point up while trying
+    WiFi.begin(_staSsid, _staPass);
 }
 
 auto WiFiManager::isConnected() -> bool { return WiFi.status() == WL_CONNECTED; }

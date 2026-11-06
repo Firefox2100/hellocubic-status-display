@@ -27,6 +27,9 @@ void begin(bool apMode);
 /** @brief Drive the active channel. Call once per loop() iteration. */
 void update();
 
+/** @brief The device left (or entered) access-point setup mode: show the right screens from now on. */
+void setApMode(bool apMode);
+
 /** @brief Apply new display settings. Clears any manual GIF override. */
 void applySettings(const UiSettings& settings);
 

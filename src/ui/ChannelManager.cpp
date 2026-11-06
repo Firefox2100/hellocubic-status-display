@@ -364,6 +364,16 @@ void ChannelManager::begin(bool apMode) {
                                                                                            : now + BOOT_HOLD_FLOOR_MS;
 }
 
+void ChannelManager::setApMode(bool apMode) {
+    if (apMode == g_apMode) {
+        return;
+    }
+    g_apMode = apMode;
+    if (g_started && !g_bootHold) {
+        refreshScreen(true);  // leaving setup mode: back to the channels (or the "online" screen until time is set)
+    }
+}
+
 void ChannelManager::applySettings(const UiSettings& settings) {
     g_settings = settings;
     g_manualGif = "";

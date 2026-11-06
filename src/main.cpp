@@ -191,6 +191,10 @@ void loop() {
         ntpClient->loop();
     }
 
+    if (wifiManager != nullptr) {
+        wifiManager->loop();  // in access-point fallback: retry the saved Wi-Fi now and then
+        ChannelManager::setApMode(wifiManager->isApMode());
+    }
     ChannelManager::update();
     UsageManager::update();  // blocks for a few seconds when a fetch is due
 

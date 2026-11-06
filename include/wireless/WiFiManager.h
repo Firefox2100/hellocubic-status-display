@@ -37,12 +37,24 @@ class WiFiManager {
     static bool isConnected();
     static String getConnectedSSID();
 
+    /**
+     * @brief In access-point fallback mode, quietly retry the saved Wi-Fi network from time to time.
+     *
+     * Call from the main loop (never blocks). It only tries while nobody is connected to the setup access point, so
+     * it never disturbs someone configuring the device, and gives up a round after 15 s. When the network is back
+     * the access point is switched off and isApMode() turns false.
+     */
+    void loop();
+
    private:
     const char* _staSsid;
     const char* _staPass;
     const char* _apSsid;
     const char* _apPass;
     bool _apMode = false;
+    bool _retrying = false;
+    uint32_t _lastRetryMs = 0;
+    uint32_t _retryStartMs = 0;
 };
 
 #endif  // WIFI_MANAGER_H
