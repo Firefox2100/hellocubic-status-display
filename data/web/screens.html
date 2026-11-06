@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Screens</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/screensHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <main class="container">
+      <header id="header-placeholder"></header>
+      <a href="./index.html" class="wifi-back-link">← Back to Home</a>
+      <section x-data="screensHandler()" x-init="init()">
+        <h2>Screens</h2>
+        <p>What the cube shows when no notification is on screen. Needs the API token (see "API Token").</p>
+
+        <h3>Status</h3>
+        <label>Mode
+          <select x-model="presence.mode">
+            <option value="normal">Normal (rotate the pages below)</option>
+            <option value="busy">Busy (red screen)</option>
+            <option value="away">Away</option>
+            <option value="relaxing">Relaxing (animation)</option>
+          </select>
+        </label>
+        <label>Text (optional, up to 27 characters)
+          <input type="text" maxlength="27" x-model="presence.text" />
+        </label>
+        <label x-show="presence.mode === 'relaxing'">Animation
+          <select x-model="presence.gif">
+            <option value="">(the idle animation)</option>
+            <template x-for="f in gifs" :key="f"><option :value="f" x-text="f"></option></template>
+          </select>
+        </label>
+        <button type="button" class="primary" @click="savePresence()">Set status</button>
+
+        <h3>Pages</h3>
+        <label>Idle screen
+          <select x-model="ui.mode">
+            <option value="clock">Clock</option>
+            <option value="gif">Animation</option>
+            <option value="cycle">Clock and animation</option>
+          </select>
+        </label>
+        <label>Seconds per page
+          <input type="number" min="3" max="3600" x-model.number="ui.interval_s" />
+        </label>
+        <label><input type="checkbox" x-model="ui.auto_rotate" /> Rotate through the pages</label>
+        <label><input type="checkbox" x-model="ui.clock_24h" /> 24-hour clock</label>
+        <fieldset>
+          <legend>Pages in the rotation</legend>
+          <label><input type="checkbox" x-model="ui.show_claude" /> Claude usage</label>
+          <label><input type="checkbox" x-model="ui.show_codex" /> Codex usage</label>
+          <label><input type="checkbox" x-model="ui.show_ai" /> Claude + Codex side by side</label>
+          <label><input type="checkbox" x-model="ui.show_trend" /> 7-day trend</label>
+          <label><input type="checkbox" x-model="ui.show_info" /> Device info</label>
+          <label><input type="checkbox" x-model="ui.claude_weekly_hero" /> Claude: weekly figure first</label>
+          <label><input type="checkbox" x-model="ui.codex_weekly_hero" /> Codex: weekly figure first</label>
+        </fieldset>
+        <label>Refresh usage every (minutes, 1-60)
+          <input type="number" min="1" max="60" x-model.number="ui.refresh_min" />
+        </label>
+        <label><input type="checkbox" x-model="ui.tls_verify" /> Verify the providers' certificates</label>
+        <button type="button" class="primary" @click="saveUi()">Save pages</button>
+
+        <p x-text="statusMsg"></p>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

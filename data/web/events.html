@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Events</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/eventsHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <main class="container">
+      <header id="header-placeholder"></header>
+      <a href="./index.html" class="wifi-back-link">← Back to Home</a>
+      <section x-data="eventsHandler()" x-init="init()">
+        <h2>Scheduled events</h2>
+        <p x-text="summary"></p>
+
+        <h3>Add or change an event</h3>
+        <label>Id (letters, digits, . _ -, up to 16)
+          <input type="text" maxlength="16" x-model="f.id" placeholder="standup" />
+        </label>
+        <label>Does
+          <select x-model="f.kind">
+            <option value="card">Show a notification</option>
+            <option value="mode">Change the status</option>
+          </select>
+        </label>
+        <template x-if="f.kind === 'card'">
+          <div>
+            <label>Title (up to 27)<input type="text" maxlength="27" x-model="f.title" /></label>
+            <label>Detail (up to 39)<input type="text" maxlength="39" x-model="f.body" /></label>
+            <label>Value (up to 15, e.g. 09:00)<input type="text" maxlength="15" x-model="f.value" /></label>
+            <label>Icon
+              <select x-model="f.icon">
+                <option value="">(none)</option>
+                <template x-for="i in icons" :key="i"><option :value="i" x-text="i"></option></template>
+              </select>
+            </label>
+            <label>Importance
+              <select x-model="f.level">
+                <option value="info">info</option><option value="warning">warning</option>
+                <option value="success">success</option><option value="error">error</option>
+              </select>
+            </label>
+            <label>Stays for (seconds, 0 = default)<input type="number" min="0" max="86400" x-model.number="f.ttl" /></label>
+          </div>
+        </template>
+        <template x-if="f.kind === 'mode'">
+          <div>
+            <label>Status
+              <select x-model="f.mode">
+                <option value="normal">Normal</option><option value="busy">Busy</option>
+                <option value="away">Away</option><option value="relaxing">Relaxing</option>
+              </select>
+            </label>
+            <label>Text (up to 27)<input type="text" maxlength="27" x-model="f.text" /></label>
+            <label x-show="f.mode === 'relaxing'">Animation file<input type="text" x-model="f.gif" placeholder="arch.cgf" /></label>
+          </div>
+        </template>
+        <label>When
+          <select x-model="f.repeat">
+            <option value="">Once</option>
+            <option value="daily">Every day</option>
+            <option value="weekly">Every week</option>
+            <option value="monthly">Every month</option>
+          </select>
+        </label>
+        <template x-if="!f.repeat">
+          <label>Date and time (this browser's time zone)
+            <input type="datetime-local" x-model="f.at" />
+          </label>
+        </template>
+        <template x-if="f.repeat">
+          <div>
+            <label>Time of day (cube's time zone)<input type="time" x-model="f.time" /></label>
+            <label x-show="f.repeat === 'weekly'">Days (comma separated: mon,wed,fri)
+              <input type="text" x-model="f.days" /></label>
+            <label x-show="f.repeat === 'monthly'">Day of month
+              <input type="number" min="1" max="31" x-model.number="f.day" /></label>
+          </div>
+        </template>
+        <div style="display: flex; gap: 0.5em; flex-wrap: wrap">
+          <button type="button" class="primary" @click="save()">Save event</button>
+          <button type="button" class="secondary" @click="reset()">Clear form</button>
+        </div>
+        <p x-text="statusMsg"></p>
+
+        <h3>Stored events</h3>
+        <button type="button" class="secondary" @click="load()">Refresh</button>
+        <figure>
+          <table>
+            <thead><tr><th>Id</th><th>What</th><th>When</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="e in events" :key="e.id">
+                <tr>
+                  <td x-text="e.id"></td>
+                  <td x-text="describe(e)"></td>
+                  <td x-text="when(e)"></td>
+                  <td style="white-space: nowrap">
+                    <button type="button" class="secondary" @click="edit(e)">Edit</button>
+                    <button type="button" class="secondary" @click="fire(e.id)">Show now</button>
+                    <button type="button" class="contrast" @click="remove(e.id)">Delete</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </figure>
+        <p x-show="!events.length">No events stored.</p>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

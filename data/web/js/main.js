@@ -13,4 +13,10 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("rebootHandler", rebootHandler);
   if (typeof tokenHandler !== "undefined")
     Alpine.data("tokenHandler", tokenHandler);
+  if (typeof screensHandler !== "undefined")
+    Alpine.data("screensHandler", screensHandler);
+  if (typeof eventsHandler !== "undefined")
+    Alpine.data("eventsHandler", eventsHandler);
+  if (typeof credentialsHandler !== "undefined")
+    Alpine.data("credentialsHandler", credentialsHandler);
 });

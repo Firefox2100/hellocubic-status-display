@@ -651,6 +651,12 @@ paths:
                   type: "boolean"
                 show_codex:
                   type: "boolean"
+                show_trend:
+                  type: "boolean"
+                show_ai:
+                  type: "boolean"
+                show_info:
+                  type: "boolean"
                 refresh_min:
                   type: "number"
                 claude_weekly_hero:
@@ -1088,6 +1094,13 @@ paths:
                   type: "array"
                 day:
                   type: "number"
+                mode:
+                  type: "string"
+                  description: "normal, busy, away or relaxing: sets the idle screen instead of showing a card (then text and gif replace title and body)"
+                text:
+                  type: "string"
+                gif:
+                  type: "string"
               example:
                 id: "mtg-0845"
                 title: "Meeting in 15 min"
