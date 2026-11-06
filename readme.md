@@ -1,3 +1,21 @@
+# Cube status display firmware
+
+> A fork of [GeekMagic Open Firmware](https://github.com/Times-Z/GeekMagic-Open-Firmware) that turns the **HelloCubic Lite**
+> (ESP8266, 240x240 ST7789) into an always-on **status display**: a clock, push notifications with animated office icons
+> (email, meeting, call, ...), and Claude / Codex usage limits fetched by the device itself.
+
+- **Clock** with a blinking colon, **notification cards** pushed over HTTP (`POST /api/v1/push`, priority queue, approvals pin the
+  screen, procedural icons), an **Agents** list, and **Claude / Codex usage** screens.
+- UI, notification model and usage screens adapted from [glimmer](https://github.com/Avinava/glimmer) (MIT): see
+  [THIRD_PARTY.md](THIRD_PARTY.md). Upstream GeekMagic code remains GPL-3.0-or-later.
+- Developer and agent notes (architecture, memory budget, API, test recipes): [AGENTS.md](AGENTS.md). API spec: [swagger.yml](swagger.yml).
+- Usage fetching talks to **undocumented web endpoints** with your own session credentials: read the disclaimer in
+  [THIRD_PARTY.md](THIRD_PARTY.md) and AGENTS.md section 5.4 first. It is off unless you set a credential.
+
+The rest of this file is the upstream documentation (hardware teardown, wiring, build and flash guide), which still applies.
+
+---
+
 # Geekmagic open firmware
 
 > This repo documents the LCD interface inside the **HelloCubic Lite** cube (ESP8266) from [GeekMagicClock](https://github.com/GeekMagicClock/HelloCubic-Lite)
@@ -420,32 +438,6 @@ This project is licensed under the **GPLv3 License** - see the [LICENSE](LICENSE
 **Made with ❤️**
 
 [Star us on GitHub](https://github.com/Times-Z/GeekMagic-Open-Firmware.git) if you find this project useful !
-
-## Optional system metrics dashboard
-
-The firmware can display a compact six-value PC metrics dashboard instead of the normal content loop. It is disabled by default, so existing builds keep their current behavior.
-
-Enable it by appending `METRICS_URL` to the existing `build_flags` in `platformio.ini`:
-
-```ini
--DMETRICS_URL=\"http://192.168.1.10:8765/metrics\"
-```
-
-The endpoint is polled once per second and must return JSON with these fields:
-
-```json
-{
-  "ok": true,
-  "gpu_usage": 28,
-  "cpu_usage": 24,
-  "gpu_vram_mb": 6930,
-  "memory_used_gb": 36.8,
-  "gpu_power": 45,
-  "gpu_temp_c": 50
-}
-```
-
-Only changed value regions are redrawn, preventing the full-screen flash that would otherwise occur during one-second updates. If the endpoint or Wi-Fi is unavailable, the display shows `PC OFFLINE`.
 
 This project took me a lot of time !
 

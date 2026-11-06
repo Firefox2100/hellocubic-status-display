@@ -28,6 +28,7 @@
 #include "config/ConfigManager.h"
 #include "display/DisplayManager.h"
 #include "web/Webserver.h"
+#include "system/Diagnostics.h"
 
 extern ConfigManager configManager;
 
@@ -313,6 +314,16 @@ static void handleRescueStatus() {
 
     doc["flash_size"] = ESP.getFlashChipRealSize();  // NOLINT(readability-static-accessed-through-instance)
     doc["reset_reason"] = ESP.getResetReason();      // NOLINT(readability-static-accessed-through-instance)
+    {
+        // exccause / epc1 / max_free_block for decoding the crash that led here
+        JsonDocument diag;
+        Diagnostics::fill(diag);
+        for (JsonPair pair : diag.as<JsonObject>()) {
+            if (doc[pair.key()].isNull()) {
+                doc[pair.key()] = pair.value();
+            }
+        }
+    }
 
     RtcBootData data{};
     const uint32_t rtcBootCounter = (readRtcBoot(data) && data.magic == RTC_MAGIC) ? data.crashCount : 0;

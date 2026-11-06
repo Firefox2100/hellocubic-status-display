@@ -24,6 +24,18 @@
 #include "config/ConfigManager.h"
 #include "config/SecureStorage.h"
 
+namespace {
+auto readBool(JsonVariantConst value, bool fallback) -> bool { return value.isNull() ? fallback : value.as<bool>(); }
+
+auto readUint16(JsonVariantConst value, uint16_t fallback) -> uint16_t {
+    return value.isNull() ? fallback : value.as<uint16_t>();
+}
+
+auto readString(JsonVariantConst value, const std::string& fallback) -> std::string {
+    return value.is<const char*>() ? std::string(value.as<const char*>()) : fallback;
+}
+}  // namespace
+
 ConfigManager::ConfigManager(const char* filename) : filename(filename), secure() {}
 
 /**
@@ -69,6 +81,40 @@ auto ConfigManager::load() -> bool {
 
     this->lcd_rotation = doc["lcd_rotation"] | lcd_rotation;
 
+    // Always honor the saved NTP server (it used to be applied only during credential migration)
+    if (ntp_server_cfg.length() != 0) {
+        this->ntp_server = ntp_server_cfg.c_str();
+    }
+
+    this->timezone = readString(doc["timezone"], this->timezone);
+
+    if (!doc["ui"].isNull()) {
+        JsonVariantConst uiCfg = doc["ui"];
+        this->ui.userName = readString(uiCfg["user_name"], ui.userName);
+        this->ui.clock24h = readBool(uiCfg["clock_24h"], ui.clock24h);
+        this->ui.idleMode = readString(uiCfg["idle_mode"], ui.idleMode);
+        this->ui.idleGif = readString(uiCfg["idle_gif"], ui.idleGif);
+        this->ui.channelSec = readUint16(uiCfg["channel_sec"], ui.channelSec);
+        this->ui.autoRotate = readBool(uiCfg["auto_rotate"], ui.autoRotate);
+        this->ui.pinApprovals = readBool(uiCfg["pin_approvals"], ui.pinApprovals);
+        this->ui.approvalTtlMin = readUint16(uiCfg["approval_ttl_min"], ui.approvalTtlMin);
+        this->ui.agentNightShow = readBool(uiCfg["agent_night_show"], ui.agentNightShow);
+        this->ui.agentDoneCards = readBool(uiCfg["agent_done_cards"], ui.agentDoneCards);
+        this->ui.showClaude = readBool(uiCfg["show_claude"], ui.showClaude);
+        this->ui.showCodex = readBool(uiCfg["show_codex"], ui.showCodex);
+        this->ui.refreshMin = readUint16(uiCfg["refresh_min"], ui.refreshMin);
+        this->ui.claudeWeeklyHero = readBool(uiCfg["claude_weekly_hero"], ui.claudeWeeklyHero);
+        this->ui.codexWeeklyHero = readBool(uiCfg["codex_weekly_hero"], ui.codexWeeklyHero);
+        this->ui.tlsVerify = readBool(uiCfg["tls_verify"], ui.tlsVerify);
+    } else if (!doc["idle"].isNull()) {
+        // Phase 2 layout: carry the old settings over (the cycle list is gone, mode "cycle" now alternates)
+        JsonVariantConst oldCfg = doc["idle"];
+        this->ui.idleMode = readString(oldCfg["mode"], ui.idleMode);
+        this->ui.idleGif = readString(oldCfg["gif"], ui.idleGif);
+        this->ui.channelSec = readUint16(oldCfg["interval_s"], ui.channelSec);
+        this->ui.clock24h = readBool(oldCfg["clock_24h"], ui.clock24h);
+    }
+
     String nvs_ssid = secure.get("wifi_ssid", "");
     String nvs_password = secure.get("wifi_password", "");
     String nvs_api_token = secure.get("api_token", "");
@@ -79,10 +125,6 @@ auto ConfigManager::load() -> bool {
 
         this->ssid = secure.get("wifi_ssid").c_str();
         this->password = secure.get("wifi_password").c_str();
-
-        if (ntp_server_cfg.length() != 0) {
-            this->ntp_server = ntp_server_cfg.c_str();
-        }
 
         // Ensure we delete the wifi credentials from the json config after migrating
         ConfigManager::save();
@@ -204,6 +246,24 @@ auto ConfigManager::save() -> bool {
     if (!this->ntp_server.empty()) {
         doc["ntp_server"] = this->ntp_server.c_str();
     }
+    doc["timezone"] = this->timezone.c_str();
+
+    doc["ui"]["user_name"] = ui.userName.c_str();
+    doc["ui"]["clock_24h"] = ui.clock24h;
+    doc["ui"]["idle_mode"] = ui.idleMode.c_str();
+    doc["ui"]["idle_gif"] = ui.idleGif.c_str();
+    doc["ui"]["channel_sec"] = ui.channelSec;
+    doc["ui"]["auto_rotate"] = ui.autoRotate;
+    doc["ui"]["pin_approvals"] = ui.pinApprovals;
+    doc["ui"]["approval_ttl_min"] = ui.approvalTtlMin;
+    doc["ui"]["agent_night_show"] = ui.agentNightShow;
+    doc["ui"]["agent_done_cards"] = ui.agentDoneCards;
+    doc["ui"]["show_claude"] = ui.showClaude;
+    doc["ui"]["show_codex"] = ui.showCodex;
+    doc["ui"]["refresh_min"] = ui.refreshMin;
+    doc["ui"]["claude_weekly_hero"] = ui.claudeWeeklyHero;
+    doc["ui"]["codex_weekly_hero"] = ui.codexWeeklyHero;
+    doc["ui"]["tls_verify"] = ui.tlsVerify;
 
     if (serializeJson(doc, file) == 0) {
         Logger::error("Failed to write config file", "ConfigManager");

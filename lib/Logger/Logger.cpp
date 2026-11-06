@@ -64,22 +64,6 @@ void Logger::log(LogLevel level, const char* message, const char* className) {
 }
 
 /**
- * @brief Logs a debug message
- *
- * @param message The debug message to log
- * @param className optional class name for context
- */
-void Logger::debug(const char* message, const char* className) { log(LOG_DEBUG, message, className); }
-
-/**
- * @brief Logs an info message
- *
- * @param message The info message to log
- * @param className optional class name for context
- */
-void Logger::info(const char* message, const char* className) { log(LOG_INFO, message, className); }
-
-/**
  * @brief Logs a warning message
  *
  * @param message The warning message to log

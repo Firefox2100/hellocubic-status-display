@@ -101,6 +101,7 @@ auto Webserver::beginFS(bool formatIfFailed) -> bool {
  */
 void Webserver::begin() {
     Logger::info("Starting webserver", "Webserver");
+    _server.onNotFound([this]() { handleNotFound(); });
     _server.begin();
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
@@ -241,84 +242,87 @@ void Webserver::registerStaticDir(  // NOLINT(readability-convert-member-functio
  */
 void Webserver::registerGenericStaticFallback(  // NOLINT(readability-convert-member-functions-to-static)
     const String& fsBasePath, bool excludeRoot) {
-    String basePath = fsBasePath;
-    if (basePath.endsWith("/") && basePath.length() > 1) {
-        basePath = basePath.substring(0, basePath.length() - 1);
+    _staticBase = fsBasePath;
+    if (_staticBase.endsWith("/") && _staticBase.length() > 1) {
+        _staticBase = _staticBase.substring(0, _staticBase.length() - 1);
     }
-
-    _server.onNotFound([this, basePath, excludeRoot]() {
-        if (_server.method() == HTTP_OPTIONS) {
-            _server.sendHeader("Access-Control-Allow-Origin", "*");
-            _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-            _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-            _server.sendHeader("Access-Control-Max-Age", "3600");
-            _server.send(HTTP_CODE_OK);
-            return;
-        }
-
-        if (_server.method() != HTTP_GET) {
-            _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
-            return;
-        }
-
-        const String& uri = _server.uri();
-
-        if (excludeRoot && uri == "/") {
-            _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
-            return;
-        }
-
-        if (uri.startsWith("/api/")) {
-            _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
-            return;
-        }
-
-        char uriBuf[URI_BUF_SIZE] = {0};
-        char fsPath[PATH_BUF_SIZE] = {0};
-        char chosenPath[PATH_BUF_SIZE] = {0};
-
-        strncpy(uriBuf, uri.c_str(), sizeof(uriBuf) - 1);
-
-        if (snprintf(fsPath, sizeof(fsPath), "%s%s", basePath.c_str(), uriBuf) <= 0) {
-            _server.send(HTTP_CODE_INTERNAL_ERROR, "text/plain", "Path error");
-            return;
-        }
-
-        if (LittleFS.exists(fsPath)) {
-            strncpy(chosenPath, fsPath, sizeof(chosenPath) - 1);
-        } else {
-            _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
-            return;
-        }
-
-        File f = LittleFS.open(chosenPath, "r");
-        if (!f) {
-            _server.send(HTTP_CODE_INTERNAL_ERROR, "text/plain", "Open failed");
-            return;
-        }
-
-        _server.sendHeader("Cache-Control", "public, max-age=86400");
-
-        _server.setContentLength(f.size());
-        _server.streamFile(f, guessContentTypeC(fsPath));
-        f.close();
-
-        if (LOG_STATIC_HIT_INFO) {
-            char infoMsg[320];
-            snprintf(infoMsg, sizeof(infoMsg), "Served %s for URI: %s", chosenPath, uriBuf);
-            Logger::info(infoMsg, "Webserver");
-        }
-    });
+    _staticExcludeRoot = excludeRoot;
+    _staticEnabled = true;
 }
 
 /**
- * @brief Simple notFound handler registration
- * @param handler The function to call when a route is not found
- *
- * @return void
+ * @brief Add a plain route (see Route)
  */
-void Webserver::onNotFound(std::function<void()> handler) {
-    _server.onNotFound([handler]() { handler(); });
+void Webserver::route(  // NOLINT(readability-convert-member-functions-to-static)
+    const char* path, HTTPMethod method, void (*handler)(Webserver*)) {
+    if (_routeCount >= _routes.size()) {
+        Logger::error("Route table full", "Webserver");
+
+        return;
+    }
+    _routes.at(_routeCount++) = Route{path, method, handler};
+}
+
+/**
+ * @brief The catch-all: CORS preflight, then the route table, then static files, then 404
+ */
+void Webserver::handleNotFound() {
+    if (_server.method() == HTTP_OPTIONS) {
+        _server.sendHeader("Access-Control-Allow-Origin", "*");
+        _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+        _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        _server.sendHeader("Access-Control-Max-Age", "3600");
+        _server.send(HTTP_CODE_OK);
+        return;
+    }
+
+    for (size_t i = 0; i < _routeCount; i++) {
+        const Route& entry = _routes.at(i);
+        if (entry.method == _server.method() && _server.uri() == entry.path) {
+            entry.handler(this);
+
+            return;
+        }
+    }
+
+    if (_staticEnabled) {
+        serveStaticFallback();
+
+        return;
+    }
+
+    _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
+}
+
+/**
+ * @brief Serve a file from the static directory, or 404
+ */
+void Webserver::serveStaticFallback() {
+    const String& uri = _server.uri();
+    if (_server.method() != HTTP_GET || (_staticExcludeRoot && uri == "/") || uri.startsWith("/api/")) {
+        _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
+
+        return;
+    }
+
+    const String fsPath = _staticBase + uri;
+    if (!LittleFS.exists(fsPath)) {
+        _server.send(HTTP_CODE_NOT_FOUND, "text/plain", "Not found");
+
+        return;
+    }
+
+    File file = LittleFS.open(fsPath, "r");
+    if (!file) {
+        _server.send(HTTP_CODE_INTERNAL_ERROR, "text/plain", "Open failed");
+
+        return;
+    }
+
+    _server.sendHeader("Cache-Control", "public, max-age=86400");
+    _server.setContentLength(file.size());
+    _server.streamFile(file, guessContentTypeC(fsPath.c_str()));
+    file.close();
 }
 
 /**

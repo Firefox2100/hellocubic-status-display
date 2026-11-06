@@ -61,7 +61,35 @@ static void deriveKey(uint8_t* out32) {
     br_sha256_out(&ctx, out32);
 }
 
+void SecureStorage::xorWithDeviceKey(uint8_t* data, size_t len) {
+    std::array<uint8_t, KEY_LEN> key;
+    deriveKey(key.data());
+    for (size_t i = 0; i < len; ++i) {
+        data[i] ^= key[i % KEY_LEN];
+    }
+}
+
 SecureStorage::SecureStorage(size_t eepromSize) : _eepromSize(eepromSize), _doc() {}
+
+/**
+ * @brief Map the EEPROM into RAM (the emulation keeps a full copy of it while it is open)
+ */
+void SecureStorage::openEeprom() {
+    if (!_eepromOpen) {
+        EEPROM.begin(static_cast<int>(_eepromSize));
+        _eepromOpen = true;
+    }
+}
+
+/**
+ * @brief Release the RAM copy. The data stays in _doc, so the 2 KB is only needed while reading or writing.
+ */
+void SecureStorage::closeEeprom() {
+    if (_eepromOpen) {
+        EEPROM.end();
+        _eepromOpen = false;
+    }
+}
 
 /**
  * @brief Initialize the EEPROM-backed NVS and load any existing data
@@ -72,7 +100,7 @@ SecureStorage::SecureStorage(size_t eepromSize) : _eepromSize(eepromSize), _doc(
 auto SecureStorage::begin() -> bool {
     Logger::info("EEPROM init start", "SecureStorage");
 
-    EEPROM.begin(static_cast<int>(_eepromSize));
+    openEeprom();
 
     if (!loadToMemory()) {
         Logger::warn("No existing NVS data found, initializing new storage", "SecureStorage");
@@ -81,11 +109,13 @@ auto SecureStorage::begin() -> bool {
         if (!flushToEEPROM()) {
             Logger::error("Failed to initialize NVS in EEPROM", "SecureStorage");
             _ready = false;
+            closeEeprom();
 
             return false;
         }
     }
 
+    closeEeprom();
     _ready = true;
 
     return true;
@@ -168,6 +198,17 @@ auto const SecureStorage::loadToMemory() -> bool {
  * @return true on success false on failure
  */
 auto const SecureStorage::flushToEEPROM() -> bool {
+    const bool wasOpen = _eepromOpen;
+    openEeprom();
+    const bool written = writeEeprom();
+    if (!wasOpen) {
+        closeEeprom();
+    }
+
+    return written;
+}
+
+auto SecureStorage::writeEeprom() const -> bool {
     const size_t headerSize = 6;
     size_t payloadMax = _eepromSize - headerSize;
 

@@ -23,6 +23,7 @@
 #include <Arduino.h>
 #include <ESP8266WebServer.h>
 #include <LittleFS.h>
+#include <array>
 #include <functional>
 
 /**
@@ -50,6 +51,19 @@ static int constexpr HTTP_CODE_UNAUTHORIZED = 401;
  */
 static int constexpr HTTP_CODE_INTERNAL_ERROR = 500;
 
+class Webserver;
+
+/**
+ * @brief A plain API route: exact path + method -> handler. Routes live in a fixed table inside the server and are
+ *        dispatched from one catch-all handler, instead of one heap-allocated handler object per route (that cost
+ *        about 100 bytes of heap each, ~4.5 KB for the whole API).
+ */
+struct Route {
+    const char* path = nullptr;
+    HTTPMethod method = HTTP_GET;
+    void (*handler)(Webserver*) = nullptr;
+};
+
 class Webserver {
    public:
     explicit Webserver(uint16_t port = 80);
@@ -62,11 +76,24 @@ class Webserver {
                       int cacheSeconds = 86400);
     void registerStaticDir(const String& fsDir, const String& uriPrefix, const String& contentType);
     void registerGenericStaticFallback(const String& fsBasePath = "/web", bool excludeRoot = true);
-    void onNotFound(std::function<void()> handler);
+    /**
+     * @brief Add a plain route. Routes that need an upload callback must still use raw().on().
+     */
+    void route(const char* path, HTTPMethod method, void (*handler)(Webserver*));
     ESP8266WebServer& raw();
 
    private:
+    static constexpr size_t MAX_ROUTES = 64;
+
     ESP8266WebServer _server;
+    std::array<Route, MAX_ROUTES> _routes{};
+    size_t _routeCount = 0;
+    String _staticBase;
+    bool _staticEnabled = false;
+    bool _staticExcludeRoot = true;
+
+    void handleNotFound();
+    void serveStaticFallback();
 
     static const char* guessContentTypeC(const char* path);
 };

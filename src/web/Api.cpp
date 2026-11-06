@@ -21,10 +21,21 @@
 #include <Logger.h>
 #include <ArduinoJson.h>
 #include <Updater.h>
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <ctime>
 
 #include "web/Webserver.h"
 #include "web/Api.h"
 #include "display/DisplayManager.h"
+#include "display.h"
+#include "net/TlsFetch.h"
+#include "net/UsageManager.h"
+#include "ui/BootScreen.h"
+#include "ui/ChannelManager.h"
+#include "config/CredentialStore.h"
+#include "system/Diagnostics.h"
 
 #include "config/ConfigManager.h"
 #include "wireless/WiFiManager.h"
@@ -51,6 +62,9 @@ static void otaHandleEnd(HTTPUpload& upload, int mode);
 static void otaHandleAborted(HTTPUpload& upload);
 void handleDeleteGif(Webserver* webserver);
 
+extern const char* AP_SSID;
+extern const char* AP_PASSWORD;
+
 static constexpr int WIFI_CONNECT_TIMEOUT_MS = 15000;
 static constexpr size_t NTP_CONFIG_DOC_SIZE = 512;
 static constexpr int BEARER_LEN = 7;
@@ -66,47 +80,47 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {get} /wifi/scan version=v1 group=WiFi summary="Scan available WiFi networks" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/wifi/scan", HTTP_GET, [webserver]() { handleWifiScan(webserver); });
+    webserver->route("/api/v1/wifi/scan", HTTP_GET, handleWifiScan);
 
     // @openapi {post} /wifi/connect version=v1 group=WiFi summary="Connect to a WiFi network" requiresAuth=true
     // requestBody=application/json requestBodySchema=ssid:string,password:string
     // example={"ssid":"MyNetwork","password":"password123"}
     // responses=200:application/json,400:application/json,401:application/json
-    webserver->raw().on("/api/v1/wifi/connect", HTTP_POST, [webserver]() { handleWifiConnect(webserver); });
+    webserver->route("/api/v1/wifi/connect", HTTP_POST, handleWifiConnect);
 
     // @openapi {get} /wifi/status version=v1 group=WiFi summary="Get WiFi connection status" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/wifi/status", HTTP_GET, [webserver]() { handleWifiStatus(webserver); });
+    webserver->route("/api/v1/wifi/status", HTTP_GET, handleWifiStatus);
 
     // @openapi {post} /ntp/sync version=v1 group=NTP summary="Trigger NTP sync" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/ntp/sync", HTTP_POST, [webserver]() { handleNtpSync(webserver); });
+    webserver->route("/api/v1/ntp/sync", HTTP_POST, handleNtpSync);
 
     // @openapi {get} /ntp/status version=v1 group=NTP summary="Get NTP status" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/ntp/status", HTTP_GET, [webserver]() { handleNtpStatus(webserver); });
+    webserver->route("/api/v1/ntp/status", HTTP_GET, handleNtpStatus);
 
     // @openapi {get} /ntp/config version=v1 group=NTP summary="Get NTP configuration" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/ntp/config", HTTP_GET, [webserver]() { handleNtpConfigGet(webserver); });
+    webserver->route("/api/v1/ntp/config", HTTP_GET, handleNtpConfigGet);
 
     // @openapi {post} /ntp/config version=v1 group=NTP summary="Set NTP configuration" requiresAuth=true
     // requestBody=application/json requestBodySchema=ntp_server:string example={"ntp_server":"pool.ntp.org"}
     // responses=200:application/json,400:application/json,401:application/json
-    webserver->raw().on("/api/v1/ntp/config", HTTP_POST, [webserver]() { handleNtpConfigSet(webserver); });
+    webserver->route("/api/v1/ntp/config", HTTP_POST, handleNtpConfigSet);
 
     // @openapi {get} /display/rotation version=v1 group=Display summary="Get display rotation" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/display/rotation", HTTP_GET, [webserver]() { handleDisplayRotationGet(webserver); });
+    webserver->route("/api/v1/display/rotation", HTTP_GET, handleDisplayRotationGet);
 
     // @openapi {post} /display/rotation version=v1 group=Display summary="Set display rotation" requiresAuth=true
     // requestBody=application/json requestBodySchema=rotation:integer example={"rotation":4}
     // responses=200:application/json,400:application/json,401:application/json
-    webserver->raw().on("/api/v1/display/rotation", HTTP_POST, [webserver]() { handleDisplayRotationSet(webserver); });
+    webserver->route("/api/v1/display/rotation", HTTP_POST, handleDisplayRotationSet);
 
     // @openapi {post} /reboot version=v1 group=System summary="Reboot the device" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/reboot", HTTP_POST, [webserver]() { handleReboot(webserver); });
+    webserver->route("/api/v1/reboot", HTTP_POST, handleReboot);
 
     // @openapi {post} /ota/fw version=v1 group=OTA summary="Upload firmware (OTA)" requiresAuth=true
     // requestBody=multipart/form-data responses=200:application/json,401:application/json
@@ -122,11 +136,11 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {get} /ota/status version=v1 group=OTA summary="Get OTA status" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/ota/status", HTTP_GET, [webserver]() { handleOtaStatus(webserver); });
+    webserver->route("/api/v1/ota/status", HTTP_GET, handleOtaStatus);
 
     // @openapi {post} /ota/cancel version=v1 group=OTA summary="Cancel OTA" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/ota/cancel", HTTP_POST, [webserver]() { handleOtaCancel(webserver); });
+    webserver->route("/api/v1/ota/cancel", HTTP_POST, handleOtaCancel);
 
     // @openapi {post} /gif version=v1 group=GIF summary="Upload a GIF" requiresAuth=true
     // requestBody=multipart/form-data responses=200:application/json,401:application/json
@@ -137,48 +151,91 @@ void registerApiEndpoints(Webserver* webserver) {
     // @openapi {post} /gif/play version=v1 group=GIF summary="Play a GIF by name" requiresAuth=true
     // requestBody=application/json requestBodySchema=name:string example={"name":"animation.gif"}
     // responses=200:application/json,400:application/json,401:application/json,404:application/json
-    webserver->raw().on("/api/v1/gif/play", HTTP_POST, [webserver]() { handlePlayGif(webserver); });
+    webserver->route("/api/v1/gif/play", HTTP_POST, handlePlayGif);
 
     // @openapi {post} /gif/stop version=v1 group=GIF summary="Stop GIF playback" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/gif/stop", HTTP_POST, [webserver]() { handleStopGif(webserver); });
+    webserver->route("/api/v1/gif/stop", HTTP_POST, handleStopGif);
 
     // @openapi {delete} /gif version=v1 group=GIF summary="Delete a GIF by name" requiresAuth=true
     // requestBody=application/json requestBodySchema=name:string example={"name":"animation.gif"}
     // responses=200:application/json,400:application/json,401:application/json,404:application/json
-    webserver->raw().on("/api/v1/gif", HTTP_DELETE, [webserver]() { handleDeleteGif(webserver); });
+    webserver->route("/api/v1/gif", HTTP_DELETE, handleDeleteGif);
 
     // @openapi {get} /gif version=v1 group=GIF summary="List GIFs" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/gif", HTTP_GET, [webserver]() { handleListGifs(webserver); });
+    webserver->route("/api/v1/gif", HTTP_GET, handleListGifs);
+
+    // @openapi {get} /system version=v1 group=System summary="Firmware version, uptime, heap and last reset reason"
+    // requiresAuth=true responses=200:application/json,401:application/json
+    webserver->route("/api/v1/system", HTTP_GET, handleSystemGet);
+
+    // @openapi {get} /ui version=v1 group=Display summary="Get display settings, channel and current time" requiresAuth=true
+    // responses=200:application/json,401:application/json
+    webserver->route("/api/v1/ui", HTTP_GET, handleUiGet);
+
+    // @openapi {post} /ui version=v1 group=Display summary="Update display settings (partial update)"
+    // requiresAuth=true requestBody=application/json
+    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean
+    // example={"mode":"cycle","gif":"arch-i-use-arch-btw.gif","interval_s":15,"user_name":"Patrick","timezone":"GMT0BST,M3.5.0/1,M10.5.0"}
+    // responses=200:application/json,400:application/json,401:application/json
+    webserver->route("/api/v1/ui", HTTP_POST, handleUiSet);
+
+    // Earlier name of /ui, kept so existing scripts keep working
+    webserver->route("/api/v1/idle", HTTP_GET, handleUiGet);
+    webserver->route("/api/v1/idle", HTTP_POST, handleUiSet);
+
+    // @openapi {get} /credentials version=v1 group=Credentials summary="Which Claude/Codex credentials are set (never the values)"
+    // requiresAuth=true responses=200:application/json,401:application/json
+    webserver->route("/api/v1/credentials", HTTP_GET, handleCredentialsGet);
+
+    // @openapi {post} /credentials version=v1 group=Credentials summary="Set or clear Claude/Codex credentials (write-only)"
+    // requiresAuth=true requestBody=application/json
+    // requestBodySchema=claude_key:string,codex_token:string,codex_device_id:string,codex_model_label:string
+    // example={"claude_key":"sk-ant-sid02-...","codex_model_label":"GPT-5"}
+    // responses=200:application/json,400:application/json,401:application/json
+    webserver->route("/api/v1/credentials", HTTP_POST, handleCredentialsSet);
+
+    // @openapi {post} /display/debug version=v1 group=Display summary="Display bring-up debugging (reinit, fill, backlight, invert)" requiresAuth=true
+    // requestBody=application/json requestBodySchema=action:string example={"action":"fill","color":"red"}
+    // responses=200:application/json,400:application/json,401:application/json
+    webserver->route("/api/v1/display/debug", HTTP_POST, handleDisplayDebug);
+
+    // @openapi {get} /usage version=v1 group=Usage summary="Claude/Codex usage snapshots and fetch state (no credentials)" requiresAuth=true
+    // responses=200:application/json,401:application/json
+    webserver->route("/api/v1/usage", HTTP_GET, handleUsageGet);
+
+    // @openapi {post} /usage/refresh version=v1 group=Usage summary="Resume and fetch the usage sources as soon as possible (clears a stopped or rejected state)" requiresAuth=true
+    // responses=200:application/json,401:application/json
+    webserver->route("/api/v1/usage/refresh", HTTP_POST, handleUsageRefresh);
+
+    // @openapi {post} /usage/selftest version=v1 group=Usage summary="Anonymous TLS handshake test against claude.ai or chatgpt.com (time and heap)" requiresAuth=true
+    // requestBody=application/json requestBodySchema=host:string,verify:boolean example={"host":"claude.ai","verify":true}
+    // responses=200:application/json,401:application/json
+    webserver->route("/api/v1/usage/selftest", HTTP_POST, handleTlsSelfTest);
+
+    registerPushEndpoints(webserver);
 
     // @openapi {get} /token/check version=v1 group=Authentication summary="Check bearer token validity"
     // requiresAuth=true responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/token/check", HTTP_GET, [webserver]() { handleTokenCheck(webserver); });
+    webserver->route("/api/v1/token/check", HTTP_GET, handleTokenCheck);
 
     // @openapi {post} /token/save version=v1 group=Authentication summary="Save a new bearer token" requiresAuth=true
     // requestBody=application/json requestBodySchema=token:string example={"token":"your_secure_token_value"}
     // responses=200:application/json,401:application/json,400:application/json
-    webserver->raw().on("/api/v1/token/save", HTTP_POST, [webserver]() { handleTokenSave(webserver); });
+    webserver->route("/api/v1/token/save", HTTP_POST, handleTokenSave);
 
     // @openapi {get} /logs version=v1 group=System summary="Get recent logs" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/logs", HTTP_GET, [webserver]() { handleLogsGet(webserver); });
+    webserver->route("/api/v1/logs", HTTP_GET, handleLogsGet);
 
     // @openapi {get} /logs/download version=v1 group=System summary="Download logs as text file" requiresAuth=true
     // responses=200:text/plain,401:application/json
-    webserver->raw().on("/api/v1/logs/download", HTTP_GET, [webserver]() { handleLogsDownload(webserver); });
+    webserver->route("/api/v1/logs/download", HTTP_GET, handleLogsDownload);
 
     // @openapi {post} /logs/clear version=v1 group=System summary="Clear log buffer" requiresAuth=true
     // responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/logs/clear", HTTP_POST, [webserver]() { handleLogsClear(webserver); });
-
-    webserver->raw().onNotFound([webserver]() {
-        if (webserver->raw().method() == HTTP_OPTIONS) {
-            setCorsHeaders(webserver);
-            webserver->raw().send(HTTP_CODE_OK);
-        }
-    });
+    webserver->route("/api/v1/logs/clear", HTTP_POST, handleLogsClear);
 }
 
 /**
@@ -227,7 +284,7 @@ static auto validateBearerToken(Webserver* webserver) -> bool {
  *
  * @return true if token is valid false otherwise
  */
-static auto requireBearerToken(Webserver* webserver) -> bool {
+auto requireBearerToken(Webserver* webserver) -> bool {
     if (validateBearerToken(webserver)) {
         return true;
     }
@@ -908,13 +965,8 @@ void handleDisplayRotationSet(Webserver* webserver) {
 
     auto newRotation = static_cast<uint8_t>(rotation);
     configManager.setLCDRotation(newRotation);
-    String currentIP = "unknown";
-
-    if (wifiManager != nullptr) {
-        currentIP = wifiManager->getIP().toString();
-    }
-
-    DisplayManager::setRotation(newRotation, currentIP);
+    DisplayManager::setRotation(newRotation);
+    ChannelManager::invalidate();
 
     if (!configManager.save()) {
         JsonDocument doc;
@@ -1109,7 +1161,7 @@ void handlePlayGif(Webserver* webserver) {
         return;
     }
 
-    bool playOk = DisplayManager::playGifFullScreen(foundPath);
+    bool playOk = ChannelManager::playIdleGif(foundPath);
 
     JsonDocument resp;
 
@@ -1125,6 +1177,476 @@ void handlePlayGif(Webserver* webserver) {
 }
 
 /**
+ * @brief Send a JSON document with CORS headers
+ */
+void sendJsonDoc(Webserver* webserver, int code, JsonDocument& doc) {
+    String json;
+    serializeJson(doc, json);
+
+    setCorsHeaders(webserver);
+    webserver->raw().send(code, "application/json", json);
+}
+
+static void sendIdleError(Webserver* webserver, const char* message) {
+    JsonDocument doc;
+    doc["status"] = "error";
+    doc["message"] = message;
+    sendJsonDoc(webserver, HTTP_CODE_BAD_REQUEST, doc);
+}
+
+/**
+ * @brief Accept POSIX TZ strings such as "UTC0" or "GMT0BST,M3.5.0/1,M10.5.0"
+ */
+static auto validTimezone(const char* timezone) -> bool {
+    constexpr size_t MAX_TZ_LEN = 63;
+    const size_t len = strlen(timezone);
+    if (len == 0 || len > MAX_TZ_LEN) {
+        return false;
+    }
+    for (size_t i = 0; i < len; i++) {
+        const char chr = timezone[i];
+        const bool allowed = isalnum(static_cast<unsigned char>(chr)) != 0 || chr == '+' || chr == '-' || chr == ',' ||
+                             chr == '.' || chr == '/' || chr == ':' || chr == '<' || chr == '>';
+        if (!allowed) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * @brief Firmware version, uptime, heap and previous reset reason (remote debugging)
+ */
+void handleSystemGet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    JsonDocument doc;
+    Diagnostics::fill(doc);
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Run one display debugging action. @return false for an unknown action
+ */
+static auto runDisplayAction(const String& action, JsonDocument& body) -> bool {
+    if (action == "reinit") {
+        DisplayManager::reinit(body["vendor"].as<bool>(), body["invert"].isNull() ? true : body["invert"].as<bool>());
+        ChannelManager::invalidate();
+
+        return true;
+    }
+    if (action == "fill") {
+        const String color = body["color"].as<String>();
+        constexpr std::array<std::pair<const char*, uint16_t>, 4> COLORS = {
+            {{"red", LCD_RED}, {"green", LCD_GREEN}, {"blue", LCD_BLUE}, {"white", LCD_WHITE}}};
+        uint16_t value = LCD_BLACK;
+        for (const auto& entry : COLORS) {
+            if (color == entry.first) {
+                value = entry.second;
+            }
+        }
+        DisplayManager::fillScreenColor(value);
+
+        return true;
+    }
+    if (action == "backlight") {
+        DisplayManager::setBacklight(body["pct"].as<uint8_t>());
+
+        return true;
+    }
+    if (action == "invert") {
+        DisplayManager::setInversion(body["on"].as<bool>());
+
+        return true;
+    }
+    if (action == "screen") {
+        // Preview a boot screen: connecting | online | setup. {"name": "restore"} hands the screen back.
+        const String name = body["name"].as<String>();
+        if (name == "connecting") {
+            BootScreen::showConnecting(WiFi.SSID().c_str());
+        } else if (name == "online") {
+            BootScreen::showOnline("starting up");
+        } else if (name == "setup") {
+            BootScreen::showSetup(AP_SSID, AP_PASSWORD, WiFi.SSID().c_str());
+        } else {
+            ChannelManager::invalidate();
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * @brief Usage snapshots and fetch state (never any credentials)
+ */
+void handleUsageGet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    JsonDocument doc;
+    UsageManager::fillStatus(doc);
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Make the usage sources due now (the fetch itself runs from the main loop)
+ */
+void handleUsageRefresh(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    UsageManager::resume();  // also clears a stopped / rejected state: an explicit refresh is the owner asking again
+    JsonDocument doc;
+    doc["status"] = "scheduled";
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Anonymous TLS handshake test (no credentials): {"host": "claude.ai", "verify": true|false}.
+ *        Reports the HTTP code, how long the blocking handshake took and the heap around it.
+ */
+void handleTlsSelfTest(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    JsonDocument body;
+    deserializeJson(body, webserver->raw().arg("plain"));
+    const String host = body["host"].is<const char*>() ? body["host"].as<String>() : String("claude.ai");
+    const bool verify = body["verify"].isNull() ? true : body["verify"].as<bool>();
+    // Only the hosts the firmware really talks to: pointing the BearSSL client at an arbitrary server (for example one
+    // with an RSA or untrusted chain) is how the TLS stack's fixed 6 KB stack can be overrun and the device reset.
+    if (host != "claude.ai" && host != "chatgpt.com") {
+        JsonDocument refusal;
+        refusal["status"] = "error";
+        refusal["message"] = "host must be claude.ai or chatgpt.com";
+        sendJsonDoc(webserver, HTTP_CODE_BAD_REQUEST, refusal);
+
+        return;
+    }
+
+    ChannelManager::releaseMemory();
+    Display::releaseFont();
+    JsonDocument doc;
+    doc["host"] = host;
+    doc["verify"] = verify;
+    doc["heap_before"] = ESP.getFreeHeap();            // NOLINT(readability-static-accessed-through-instance)
+    doc["block_before"] = ESP.getMaxFreeBlockSize();   // NOLINT(readability-static-accessed-through-instance)
+    if (!TlsFetch::heapOk()) {
+        doc["status"] = "error";
+        doc["message"] = "not enough contiguous heap for a TLS handshake";
+        sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+
+        return;
+    }
+
+    const TlsFetch::Result result = TlsFetch::selfTest(host.c_str(), verify);
+    doc["status"] = "ok";
+    doc["http_code"] = result.code;
+    doc["elapsed_ms"] = result.elapsedMs;
+    doc["heap_after"] = ESP.getFreeHeap();           // NOLINT(readability-static-accessed-through-instance)
+    doc["block_after"] = ESP.getMaxFreeBlockSize();  // NOLINT(readability-static-accessed-through-instance)
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Display bring-up debugging. Body {"action": "reinit"|"fill"|"backlight"|"invert", ...}:
+ *   reinit    {"vendor": bool, "invert": bool}   re-run the panel init
+ *   fill      {"color": "red|green|blue|white|black"}
+ *   backlight {"pct": 0..100}
+ *   invert    {"on": bool}
+ *   screen    {"name": "connecting"|"online"|"setup"|"restore"}  preview a boot screen
+ */
+void handleDisplayDebug(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    JsonDocument body;
+    if (deserializeJson(body, webserver->raw().arg("plain")) != DeserializationError::Ok) {
+        sendIdleError(webserver, "invalid json");
+
+        return;
+    }
+
+    if (!runDisplayAction(body["action"].as<String>(), body)) {
+        sendIdleError(webserver, "action must be reinit, fill, backlight, invert or screen");
+
+        return;
+    }
+
+    JsonDocument doc;
+    doc["status"] = "ok";
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief GIF names are plain file names: 1..32 of [A-Za-z0-9._ -], no leading dot, no "..".
+ */
+static auto validGifName(const std::string& name) -> bool {
+    constexpr size_t MAX_GIF_NAME = 32;
+    if (name.empty() || name.size() > MAX_GIF_NAME || name[0] == '.' || name.find("..") != std::string::npos) {
+        return false;
+    }
+
+    return std::all_of(name.begin(), name.end(), [](char chr) {
+        return isalnum(static_cast<unsigned char>(chr)) != 0 || chr == '.' || chr == '_' || chr == '-' || chr == ' ';
+    });
+}
+
+/**
+ * @brief The fonts only cover printable ASCII, so reject anything else in the user name.
+ */
+static auto validUserName(const std::string& name) -> bool {
+    constexpr size_t MAX_USER_NAME = 24;
+    if (name.size() > MAX_USER_NAME) {
+        return false;
+    }
+
+    return std::all_of(name.begin(), name.end(), [](char chr) { return chr >= ' ' && chr <= '~'; });
+}
+
+/**
+ * @brief Current display settings plus the device's idea of the time (handy to debug timezone issues)
+ */
+void handleUiGet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    const UiSettings& settings = configManager.ui;
+    JsonDocument doc;
+    doc["mode"] = settings.idleMode.c_str();
+    doc["gif"] = settings.idleGif.c_str();
+    doc["interval_s"] = settings.channelSec;
+    doc["auto_rotate"] = settings.autoRotate;
+    doc["clock_24h"] = settings.clock24h;
+    doc["user_name"] = settings.userName.c_str();
+    doc["pin_approvals"] = settings.pinApprovals;
+    doc["approval_ttl_min"] = settings.approvalTtlMin;
+    doc["agent_done_cards"] = settings.agentDoneCards;
+    doc["show_claude"] = settings.showClaude;
+    doc["show_codex"] = settings.showCodex;
+    doc["refresh_min"] = settings.refreshMin;
+    doc["claude_weekly_hero"] = settings.claudeWeeklyHero;
+    doc["codex_weekly_hero"] = settings.codexWeeklyHero;
+    doc["tls_verify"] = settings.tlsVerify;
+    doc["timezone"] = configManager.timezone.c_str();
+    doc["active_channel"] = ChannelManager::activeName();
+
+    constexpr time_t REASONABLE_EPOCH = 1600000000;
+    constexpr size_t TIME_TEXT_SIZE = 24;
+    const time_t now = time(nullptr);
+    const bool valid = now > REASONABLE_EPOCH;
+    doc["time_valid"] = valid;
+    if (valid) {
+        struct tm local {};
+        localtime_r(&now, &local);
+        std::array<char, TIME_TEXT_SIZE> buf{};
+        strftime(buf.data(), buf.size(), "%Y-%m-%d %H:%M:%S", &local);
+        doc["local_time"] = buf.data();
+    }
+
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Validate a settings body and apply it onto `next` / `nextTz`.
+ * @return nullptr when everything is valid, otherwise the message to send back with a 400
+ */
+static auto applyUiSchedule(JsonDocument& body, UiSettings& next) -> const char* {
+    // "mode"/"gif"/"interval_s" are the original names, "idle_mode"/"idle_gif"/"channel_sec" the config names
+    JsonVariantConst modeVal = body["mode"].isNull() ? body["idle_mode"] : body["mode"];
+    if (!modeVal.isNull()) {
+        const std::string mode = modeVal | "";
+        if (mode != "clock" && mode != "gif" && mode != "cycle") {
+            return "mode must be clock, gif or cycle";
+        }
+        next.idleMode = mode;
+    }
+    JsonVariantConst gifVal = body["gif"].isNull() ? body["idle_gif"] : body["gif"];
+    if (!gifVal.isNull()) {
+        next.idleGif = gifVal | "";
+    }
+    JsonVariantConst intervalVal = body["interval_s"].isNull() ? body["channel_sec"] : body["interval_s"];
+    if (!intervalVal.isNull()) {
+        const int interval = intervalVal | 0;
+        constexpr int MIN_INTERVAL_S = 3;
+        constexpr int MAX_INTERVAL_S = 3600;
+        if (interval < MIN_INTERVAL_S || interval > MAX_INTERVAL_S) {
+            return "interval_s must be between 3 and 3600";
+        }
+        next.channelSec = static_cast<uint16_t>(interval);
+    }
+
+    return nullptr;
+}
+
+static auto applyUiFlags(JsonDocument& body, UiSettings& next, std::string& nextTz) -> const char* {
+    if (!body["auto_rotate"].isNull()) {
+        next.autoRotate = body["auto_rotate"] | next.autoRotate;
+    }
+    if (!body["clock_24h"].isNull()) {
+        next.clock24h = body["clock_24h"] | next.clock24h;
+    }
+    if (!body["pin_approvals"].isNull()) {
+        next.pinApprovals = body["pin_approvals"] | next.pinApprovals;
+    }
+    if (!body["agent_done_cards"].isNull()) {
+        next.agentDoneCards = body["agent_done_cards"] | next.agentDoneCards;
+    }
+    if (!body["approval_ttl_min"].isNull()) {
+        const int ttl = body["approval_ttl_min"] | 0;
+        constexpr int MAX_APPROVAL_TTL_MIN = 1440;
+        if (ttl < 1 || ttl > MAX_APPROVAL_TTL_MIN) {
+            return "approval_ttl_min must be between 1 and 1440";
+        }
+        next.approvalTtlMin = static_cast<uint16_t>(ttl);
+    }
+    if (!body["user_name"].isNull()) {
+        next.userName = body["user_name"] | "";
+        if (!validUserName(next.userName)) {
+            return "user_name must be printable ASCII, at most 24 characters";
+        }
+    }
+    if (!body["timezone"].isNull()) {
+        nextTz = body["timezone"] | "";
+        if (!validTimezone(nextTz.c_str())) {
+            return "timezone must be a POSIX TZ string, e.g. GMT0BST,M3.5.0/1,M10.5.0";
+        }
+    }
+
+    // A GIF the mode needs (or that is configured at all) must exist now. It can still be deleted later, and the
+    // display then skips it.
+    const bool needsGif = next.idleMode == "gif" || next.idleMode == "cycle";
+    if ((needsGif || !next.idleGif.empty()) &&
+        (!validGifName(next.idleGif) || !LittleFS.exists(String("/gif/") + next.idleGif.c_str()))) {
+        return "gif must be the name of an existing file in /gif (required for modes gif and cycle)";
+    }
+
+    return nullptr;
+}
+
+/**
+ * @brief Validate a settings body and apply it onto `next` / `nextTz`.
+ * @return nullptr when everything is valid, otherwise the message to send back with a 400
+ */
+static auto applyUiBody(JsonDocument& body, UiSettings& next, std::string& nextTz) -> const char* {
+    if (const char* error = applyUiSchedule(body, next); error != nullptr) {
+        return error;
+    }
+    if (const char* error = applyUiFlags(body, next, nextTz); error != nullptr) {
+        return error;
+    }
+
+    return nullptr;
+}
+
+/**
+ * @brief Partial update of the display settings. Everything is validated before anything is applied.
+ */
+void handleUiSet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    JsonDocument body;
+    if (deserializeJson(body, webserver->raw().arg("plain")) != DeserializationError::Ok || !body.is<JsonObject>()) {
+        sendIdleError(webserver, "invalid json");
+
+        return;
+    }
+
+    UiSettings next = configManager.ui;
+    std::string nextTz = configManager.timezone;
+    if (const char* error = applyUiBody(body, next, nextTz); error != nullptr) {
+        sendIdleError(webserver, error);
+
+        return;
+    }
+
+    configManager.ui = next;
+    configManager.timezone = nextTz;
+    NTPClient::applyTimezone(nextTz.c_str());
+    ChannelManager::applySettings(next);
+
+    JsonDocument doc;
+    doc["status"] = configManager.save() ? "ok" : "error";
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Which credentials are set (never their values)
+ */
+void handleCredentialsGet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    const CredentialStore::Status status = CredentialStore::status();
+    JsonDocument doc;
+    doc["claude_key_set"] = status.claudeKeySet;
+    doc["codex_token_set"] = status.codexTokenSet;
+    doc["codex_device_id_set"] = status.codexDeviceIdSet;
+    doc["codex_model_label"] = status.codexModelLabel;
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
+ * @brief Set or clear credentials. Write-only: values are never returned or logged. An empty string clears a field.
+ */
+void handleCredentialsSet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    // A Codex token is around 1 KB and this request parses it twice: make sure a running GIF is not holding the heap
+    ChannelManager::releaseMemory();
+
+    JsonDocument body;
+    if (deserializeJson(body, webserver->raw().arg("plain")) != DeserializationError::Ok || !body.is<JsonObject>()) {
+        sendIdleError(webserver, "invalid json");
+
+        return;
+    }
+
+    int changed = 0;
+    for (JsonPair pair : body.as<JsonObject>()) {
+        const char* field = pair.key().c_str();
+        if (!CredentialStore::knownField(field)) {
+            sendIdleError(webserver, "unknown field (claude_key, codex_token, codex_device_id, codex_model_label)");
+
+            return;
+        }
+        if (!pair.value().is<const char*>()) {
+            sendIdleError(webserver, "values must be strings (empty string clears)");
+
+            return;
+        }
+        if (!CredentialStore::put(field, String(pair.value().as<const char*>()))) {
+            sendIdleError(webserver, "value too long or storage error");
+
+            return;
+        }
+        changed++;
+    }
+    Logger::info((String("Credentials updated: ") + changed + " field(s)").c_str(), "API");
+    UsageManager::credentialsChanged();
+
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["changed"] = changed;
+    sendJsonDoc(webserver, HTTP_CODE_OK, doc);
+}
+
+/**
  * @brief Stop currently playing GIF
  */
 void handleStopGif(Webserver* webserver) {
@@ -1134,7 +1656,7 @@ void handleStopGif(Webserver* webserver) {
 
     JsonDocument resp;
 
-    const bool stopped = DisplayManager::stopGif();
+    const bool stopped = ChannelManager::stopIdleGif();
 
     resp["status"] = stopped ? "stopped" : "error";
 
@@ -1307,6 +1829,7 @@ void handleWifiConnect(Webserver* webserver) {
     bool connectOk = false;
     if (wifiManager != nullptr) {
         connectOk = wifiManager->connectToNetwork(ssid, password, WIFI_CONNECT_TIMEOUT_MS);
+        ChannelManager::invalidate();  // the connect screens are still up: repaint the channels (or setup screen)
     }
 
     JsonDocument resp;

@@ -552,6 +552,445 @@ paths:
       security:
         - bearerAuth: []
       description: "**Requires Authentication** - Stop GIF playback. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/system:
+    get:
+      summary: "Firmware version, uptime, heap and last reset reason"
+      operationId: "op_v1_get_api_v1_system"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "System"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Firmware version, uptime, heap and last reset reason. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/ui:
+    get:
+      summary: "Get display settings, channel and current time"
+      operationId: "op_v1_get_api_v1_ui"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Display"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Get display settings, channel and current time. This endpoint requires a valid bearer token in the Authorization header."
+    post:
+      summary: "Update display settings (partial update)"
+      operationId: "op_v1_post_api_v1_ui"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Display"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Update display settings (partial update). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                mode:
+                  type: "string"
+                gif:
+                  type: "string"
+                interval_s:
+                  type: "number"
+                auto_rotate:
+                  type: "boolean"
+                clock_24h:
+                  type: "boolean"
+                user_name:
+                  type: "string"
+                pin_approvals:
+                  type: "boolean"
+                approval_ttl_min:
+                  type: "number"
+                timezone:
+                  type: "string"
+                show_claude:
+                  type: "boolean"
+                show_codex:
+                  type: "boolean"
+                refresh_min:
+                  type: "number"
+                claude_weekly_hero:
+                  type: "boolean"
+                codex_weekly_hero:
+                  type: "boolean"
+                tls_verify:
+                  type: "boolean"
+              example:
+                mode: "cycle"
+                gif: "arch-i-use-arch-btw.gif"
+                interval_s: 15
+                user_name: "Patrick"
+                timezone: "GMT0BST,M3.5.0/1,M10.5.0"
+        required: true
+  /api/v1/credentials:
+    get:
+      summary: "Which Claude/Codex credentials are set (never the values)"
+      operationId: "op_v1_get_api_v1_credentials"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Credentials"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Which Claude/Codex credentials are set (never the values). This endpoint requires a valid bearer token in the Authorization header."
+    post:
+      summary: "Set or clear Claude/Codex credentials (write-only)"
+      operationId: "op_v1_post_api_v1_credentials"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Credentials"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Set or clear Claude/Codex credentials (write-only). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                claude_key:
+                  type: "string"
+                codex_token:
+                  type: "string"
+                codex_device_id:
+                  type: "string"
+                codex_model_label:
+                  type: "string"
+              example:
+                claude_key: "sk-ant-sid02-..."
+                codex_model_label: "GPT-5"
+        required: true
+  /api/v1/push:
+    post:
+      summary: "Show a notification card (upsert by id)"
+      operationId: "op_v1_post_api_v1_push"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        409:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        413:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Push"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Show a notification card (upsert by id). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                title:
+                  type: "string"
+                kind:
+                  type: "string"
+                body:
+                  type: "string"
+                value:
+                  type: "string"
+                id:
+                  type: "string"
+                agent:
+                  type: "string"
+                project:
+                  type: "string"
+                progress:
+                  type: "number"
+                ttl_s:
+                  type: "number"
+                display:
+                  type: "string"
+                urgent:
+                  type: "boolean"
+              example:
+                id: "tests"
+                kind: "success"
+                title: "TESTS PASSED"
+                value: "142/142"
+                agent: "claude"
+                ttl_s: 120
+        required: true
+    get:
+      summary: "List active cards, most important first"
+      operationId: "op_v1_get_api_v1_push"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Push"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - List active cards, most important first. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/push/clear:
+    post:
+      summary: "Dismiss one card by id, or all of them"
+      operationId: "op_v1_post_api_v1_push_clear"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Push"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Dismiss one card by id, or all of them. This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                id:
+                  type: "string"
+                all:
+                  type: "boolean"
+              example:
+                id: "tests"
+        required: true
+  /api/v1/display/debug:
+    post:
+      summary: "Display bring-up debugging (reinit, fill, backlight, invert)"
+      operationId: "op_v1_post_api_v1_display_debug"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Display"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Display bring-up debugging (reinit, fill, backlight, invert). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                action:
+                  type: "string"
+              example:
+                action: "fill"
+                color: "red"
+        required: true
+  /api/v1/usage:
+    get:
+      summary: "Claude/Codex usage snapshots and fetch state (no credentials)"
+      operationId: "op_v1_get_api_v1_usage"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Usage"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Claude/Codex usage snapshots and fetch state (no credentials). This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/usage/refresh:
+    post:
+      summary: "Resume and fetch the usage sources as soon as possible (clears a stopped or rejected state)"
+      operationId: "op_v1_post_api_v1_usage_refresh"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Usage"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Resume and fetch the usage sources as soon as possible (clears a stopped or rejected state). This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/usage/selftest:
+    post:
+      summary: "Anonymous TLS handshake test against claude.ai or chatgpt.com (time and heap)"
+      operationId: "op_v1_post_api_v1_usage_selftest"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Usage"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Anonymous TLS handshake test against claude.ai or chatgpt.com (time and heap). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                host:
+                  type: "string"
+                verify:
+                  type: "boolean"
+              example:
+                host: "claude.ai"
+                verify: true
+        required: true
   /api/v1/token/check:
     get:
       summary: "Check bearer token validity"
@@ -696,6 +1135,14 @@ components:
       bearerFormat: "Token"
       description: "Bearer token authentication. Include the token in the Authorization header as: Bearer <token>"
 tags:
+  - name: "Credentials"
+    description: "API Credentials endpoints"
+  - name: "Display"
+    description: "API Display endpoints"
+  - name: "Push"
+    description: "API Push endpoints"
+  - name: "Usage"
+    description: "API Usage endpoints"
   - name: "Authentication"
     description: "API Authentication endpoints"
   - name: "GIF"

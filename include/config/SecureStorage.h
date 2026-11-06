@@ -34,12 +34,20 @@ class SecureStorage {
     // Set the public salt (should be called before begin())
     static void setSalt(const String& salt);
 
+    // XOR `data` in place with the device-derived key. Applying it twice restores the original. Used for secrets
+    // that are too big for the EEPROM image (see CredentialStore). Obfuscation, not encryption.
+    static void xorWithDeviceKey(uint8_t* data, size_t len);
+
    private:
     size_t _eepromSize;
     bool loadToMemory();
     bool flushToEEPROM();
     JsonDocument _doc;
     bool _ready = false;
+    bool _eepromOpen = false;
+    void openEeprom();
+    void closeEeprom();
+    bool writeEeprom() const;
 };
 
 #endif  // SECURE_STORAGE_H

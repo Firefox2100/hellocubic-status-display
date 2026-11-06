@@ -20,7 +20,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Arduino_GFX_Library.h>
+#include <TFT_eSPI.h>
 
 // Colors definitions
 static constexpr uint16_t LCD_BLACK = 0x0000;
@@ -33,18 +33,26 @@ static constexpr int ONE_LINE_SPACE = 20;
 static constexpr int TWO_LINES_SPACE = 40;
 static constexpr int THREE_LINES_SPACE = 60;
 
+// The one display instance (TFT_eSPI). Ported glimmer UI code draws on it directly.
+extern TFT_eSPI tft;
+
 class DisplayManager {
    public:
     static void begin();
-    static void setRotation(uint8_t rotation, String currentIP);
-    static Arduino_GFX* getGfx();
-    static void drawStartup(String currentIP);
+    // Re-run the panel bring-up (display debugging). vendorInit adds the cube's original ST7789 sequence.
+    static void reinit(bool vendorInit, bool invert);
+    static void setBacklight(uint8_t percent);
+    static void setInversion(bool enabled);
+    static void fillScreenColor(uint16_t color);
+    static void setRotation(uint8_t rotation);
+    static TFT_eSPI* getGfx();
     static void drawTextWrapped(int16_t xPos, int16_t yPos, const String& text, uint8_t textSize, uint16_t fgColor,
                                 uint16_t bgColor, bool clearBg);
     static void drawLoadingBar(float progress, int yPos = 180, int barWidth = 200, int barHeight = 20,
                                uint16_t fgColor = 0x07E0, uint16_t bgColor = 0x39E7);
-    static bool playGifFullScreen(const String& path, uint32_t timeMs = 0);
-    static bool stopGif();
+    static bool playGifFullScreen(const String& path);
+    static bool isGifPlaying();
+    static bool stopGif(bool clear = true);
     static void update();
     static void clearScreen();
 };

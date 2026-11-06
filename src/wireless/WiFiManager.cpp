@@ -21,12 +21,7 @@
 #include <Logger.h>
 
 #include "wireless/WiFiManager.h"
-#include "display/DisplayManager.h"
-
-static constexpr int LOADING_BAR_TEXT_X = 20;
-static constexpr int LOADING_BAR_TEXT_Y = 60;
-static constexpr int LOADING_BAR_Y = 110;
-static constexpr int LOADING_DELAY_MS = 1000;
+#include "ui/BootScreen.h"
 
 /**
  * @brief Maximum number of attempts to connect to a wifi network
@@ -71,9 +66,11 @@ auto WiFiManager::startStationMode() -> bool {
     int attempts = 0;
 
     Logger::info("Connecting to WiFi...", "WiFiManager");
+    BootScreen::showConnecting(_staSsid);
 
     while (WiFi.status() != WL_CONNECTED && attempts < MAX_CONNECTION_ATTEMPTS) {
         delay(CONNECTION_DELAY_MS);
+        BootScreen::tick(millis());
         attempts++;
     }
 
@@ -106,13 +103,7 @@ void WiFiManager::scanNetworks(JsonArray& out) {
 auto WiFiManager::connectToNetwork(const char* ssid, const char* pass, uint32_t timeoutMs) -> bool {
     Logger::info(String("Connecting to " + String(ssid)).c_str(), "WiFiManager");
 
-    constexpr int total_steps = 2;
-    int step = 0;
-
-    DisplayManager::clearScreen();
-    DisplayManager::drawTextWrapped(LOADING_BAR_TEXT_X, LOADING_BAR_TEXT_Y, "Wifi connecting...", 2, LCD_WHITE,
-                                    LCD_BLACK, true);
-    DisplayManager::drawLoadingBar(static_cast<float>(step) / static_cast<float>(total_steps), LOADING_BAR_Y);
+    BootScreen::showConnecting(ssid);
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, pass);
@@ -121,32 +112,22 @@ auto WiFiManager::connectToNetwork(const char* ssid, const char* pass, uint32_t 
 
     while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs) {
         delay(CONNECTION_DELAY_MS);
-        DisplayManager::drawLoadingBar(static_cast<float>(step) / static_cast<float>(total_steps), LOADING_BAR_Y);
+        BootScreen::tick(millis());
     }
-
-    step++;
 
     if (WiFi.status() == WL_CONNECTED) {
         _apMode = false;
 
         Logger::info(String("Connected: " + WiFi.localIP().toString()).c_str(), "WiFiManager");
-        DisplayManager::drawTextWrapped(LOADING_BAR_TEXT_X, LOADING_BAR_TEXT_Y, "Connected !", 2, LCD_WHITE, LCD_BLACK,
-                                        true);
-        DisplayManager::drawTextWrapped(LOADING_BAR_TEXT_X, LOADING_BAR_TEXT_Y + ONE_LINE_SPACE,
-                                        "IP: " + WiFi.localIP().toString(), 2, LCD_WHITE, LCD_BLACK, true);
-
-        DisplayManager::drawLoadingBar(1.0F, LOADING_BAR_Y);
+        BootScreen::showOnline("");
 
         return true;
     }
 
-    DisplayManager::drawTextWrapped(LOADING_BAR_TEXT_X, LOADING_BAR_TEXT_Y, "Failed to connect!", 2, LCD_WHITE,
-                                    LCD_BLACK, true);
     Logger::warn("Failed to connect to WiFi", "WiFiManager");
 
-    DisplayManager::drawLoadingBar(1.0F, LOADING_BAR_Y);
-
     startAccessPointMode();
+    BootScreen::showSetup(_apSsid, _apPass, ssid);
 
     return false;
 }

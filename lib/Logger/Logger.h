@@ -31,8 +31,18 @@ static constexpr size_t LOG_ENTRY_MAX_LEN = 96;
 class Logger {
    public:
     static void log(LogLevel level, const char* message, const char* className = nullptr);
-    static void debug(const char* message, const char* className = nullptr);
-    static void info(const char* message, const char* className = nullptr);
+    // Below LOG_MIN_LEVEL these are empty inline functions, so the compiler drops the call and the message string
+    // literal never reaches RAM (on this chip literals live in RAM). Arguments that build a String are still evaluated.
+    static void debug([[maybe_unused]] const char* message, [[maybe_unused]] const char* className = nullptr) {
+        if constexpr (LOG_MIN_LEVEL <= LOG_DEBUG) {
+            log(LOG_DEBUG, message, className);
+        }
+    }
+    static void info([[maybe_unused]] const char* message, [[maybe_unused]] const char* className = nullptr) {
+        if constexpr (LOG_MIN_LEVEL <= LOG_INFO) {
+            log(LOG_INFO, message, className);
+        }
+    }
     static void warn(const char* message, const char* className = nullptr);
     static void error(const char* message, const char* className = nullptr);
 

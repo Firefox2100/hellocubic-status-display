@@ -21,6 +21,8 @@
 #include <ctime>
 #include <array>
 #include <lwip/apps/sntp.h>
+#include <coredecls.h>
+#include <cstdlib>
 #include <Logger.h>
 #include <wireless/WiFiManager.h>
 #include "config/ConfigManager.h"
@@ -50,11 +52,6 @@ static constexpr unsigned long DEFAULT_NTP_TIMEOUT_MS = 10000UL;
 static constexpr unsigned long POLL_DELAY_MS = 200UL;
 
 /**
- * @brief Retry base delay in milliseconds
- */
-static constexpr unsigned long RETRY_BASE_DELAY_MS = 500UL;
-
-/**
  * @brief Reasonable epoch time to 2020/09/13
  */
 static constexpr time_t REASONABLE_EPOCH = 1600000000UL;
@@ -69,7 +66,30 @@ static constexpr size_t STATUS_BUFFER_SIZE = 64U;
  */
 static constexpr int TM_YEAR_BASE = 1900;
 
+/**
+ * @brief Delay before retrying after all attempts failed (e.g. hotspot without internet)
+ */
+static constexpr unsigned long RETRY_AFTER_FAILURE_MS = 60000UL;
+
+/**
+ * @brief Set by the SNTP callback when the system time was really updated from a server.
+ *
+ * Checking only "time looks valid" is wrong after the first sync: the clock is already valid,
+ * so a resync would be reported as done before any server answered.
+ */
+static volatile bool s_sntpUpdated = false;
+
 NTPClient::NTPClient() = default;
+
+/**
+ * @brief Apply a POSIX TZ string so localtime() returns local time
+ *
+ * @param posixTz TZ string, falls back to UTC when empty
+ */
+void NTPClient::applyTimezone(const char* posixTz) {
+    setenv("TZ", (posixTz != nullptr && posixTz[0] != '\0') ? posixTz : "UTC0", 1);
+    tzset();
+}
 
 /**
  * @brief Initialize the NTP client
@@ -84,29 +104,125 @@ void NTPClient::begin(uint32_t syncIntervalSeconds, uint8_t maxRetries) {
     _lastStatus = "not started";
     _nextSyncAttemptMs = millis();
 
+    applyTimezone(configManager.timezone.c_str());
+    settimeofday_cb([]() { s_sntpUpdated = true; });
+
     Logger::info("NTP client initialized", TAG);
 }
 
 /**
- * @brief Main loop to handle periodic NTP sync
+ * @brief Begin one SNTP attempt (does not wait for the answer)
+ */
+void NTPClient::startAttempt() {
+    const char* srv = configManager.getNtpServer();
+    const bool custom = (srv != nullptr && srv[0] != '\0');
+
+    s_sntpUpdated = false;
+    _attempt++;
+    _attemptStartMs = millis();
+    _syncing = true;
+    _lastStatus = "syncing";
+
+    // The tz overload sets TZ and tzset(), keeping local time correct
+    if (custom) {
+        configTime(configManager.timezone.c_str(), srv, DEFAULT_NTP_SERVER1);
+    } else {
+        configTime(configManager.timezone.c_str(), DEFAULT_NTP_SERVER1);
+    }
+}
+
+/**
+ * @brief Record a successful sync
+ */
+void NTPClient::recordSuccess() {
+    const time_t now = time(nullptr);
+    _lastSync = now;
+    _lastOk = true;
+    _syncing = false;
+
+    std::array<char, STATUS_BUFFER_SIZE> buf;
+    struct tm tmInfo {};
+    localtime_r(&now, &tmInfo);
+    snprintf(buf.data(), buf.size(), "Synced: %04d-%02d-%02d %02d:%02d:%02d", tmInfo.tm_year + TM_YEAR_BASE,
+             tmInfo.tm_mon + 1, tmInfo.tm_mday, tmInfo.tm_hour, tmInfo.tm_min, tmInfo.tm_sec);
+    _lastStatus = buf.data();
+
+    Logger::info(_lastStatus.c_str(), TAG);
+
+    sntp_stop();
+}
+
+/**
+ * @brief Record that all attempts failed
+ */
+void NTPClient::recordFailure() {
+    _lastOk = false;
+    _syncing = false;
+    _lastStatus = "sync failed";
+
+    sntp_stop();
+
+    Logger::error("NTP sync failed after retries", TAG);
+}
+
+/**
+ * @brief Check the running attempt without blocking
+ */
+void NTPClient::pollSync() {
+    if (s_sntpUpdated && time(nullptr) > REASONABLE_EPOCH) {
+        recordSuccess();
+        _nextSyncAttemptMs = millis() + (_syncIntervalSeconds * MILLIS_PER_SECOND);
+
+        return;
+    }
+
+    if ((millis() - _attemptStartMs) < DEFAULT_NTP_TIMEOUT_MS) {
+        return;
+    }
+
+    std::array<char, STATUS_BUFFER_SIZE> retryBuf;
+    snprintf(retryBuf.data(), retryBuf.size(), "NTP sync attempt %d failed", _attempt);
+    Logger::warn(retryBuf.data(), TAG);
+
+    if (_attempt < _maxRetries) {
+        startAttempt();
+
+        return;
+    }
+
+    recordFailure();
+    _nextSyncAttemptMs = millis() + RETRY_AFTER_FAILURE_MS;
+}
+
+/**
+ * @brief Main loop to handle periodic NTP sync (never blocks)
  *
  * @return void
  */
 void NTPClient::loop() {
     if (!WiFiManager::isConnected()) {
         _lastStatus = "network unavailable";
+        _syncing = false;
+
         return;
     }
 
-    unsigned long nowMs = millis();
-    if (nowMs >= _nextSyncAttemptMs) {
-        performSync();
-        _nextSyncAttemptMs = nowMs + (_syncIntervalSeconds * MILLIS_PER_SECOND);
+    if (_syncing) {
+        pollSync();
+
+        return;
+    }
+
+    // Signed difference keeps this correct across the millis() wrap
+    if (static_cast<long>(millis() - _nextSyncAttemptMs) >= 0) {
+        _attempt = 0;
+        Logger::info("Starting NTP sync...", TAG);
+        startAttempt();
     }
 }
 
 /**
- * @brief Trigger an immediate NTP sync
+ * @brief Trigger an immediate NTP sync and wait for the result (blocking, used by the API)
  *
  * @return true if sync was successful false otherwise
  */
@@ -121,76 +237,38 @@ auto NTPClient::syncNow() -> bool {
     }
 
     performSync();
+    _nextSyncAttemptMs = millis() + (_syncIntervalSeconds * MILLIS_PER_SECOND);
 
     return _lastOk;
 }
 
 /**
- * @brief Perform the NTP synchronization
+ * @brief Blocking sync with retries
  *
  * @return void
  */
 void NTPClient::performSync() {
-    Logger::info("Starting NTP sync...", TAG);
+    Logger::info("Starting NTP sync (manual)...", TAG);
 
-    int attempt = 0;
-    time_t now = 0;
+    _attempt = 0;
+    while (_attempt < _maxRetries) {
+        startAttempt();
 
-    while (attempt < _maxRetries) {
-        attempt++;
-        const char* srv = configManager.getNtpServer();
-        const char* server1 = (srv != nullptr && srv[0] != '\0') ? srv : DEFAULT_NTP_SERVER1;
-        const char* server2 = (srv != nullptr && srv[0] != '\0') ? DEFAULT_NTP_SERVER1 : nullptr;
+        while ((millis() - _attemptStartMs) < DEFAULT_NTP_TIMEOUT_MS) {
+            if (s_sntpUpdated && time(nullptr) > REASONABLE_EPOCH) {
+                recordSuccess();
 
-        if (server2 != nullptr) {
-            configTime(0, 0, server1, server2);
-        } else {
-            configTime(0, 0, server1);
-        }
-
-        unsigned long start = millis();
-        const unsigned long timeoutMs = DEFAULT_NTP_TIMEOUT_MS;
-
-        while ((millis() - start) < timeoutMs) {
-            now = time(nullptr);
-
-            if (now > REASONABLE_EPOCH) {
-                break;
+                return;
             }
-
-            delay(static_cast<unsigned long>(POLL_DELAY_MS));
-        }
-
-        if (now > REASONABLE_EPOCH) {
-            _lastSync = now;
-            _lastOk = true;
-            std::array<char, STATUS_BUFFER_SIZE> buf;
-            struct tm* tm_info = localtime(&now);
-
-            snprintf(buf.data(), buf.size(), "Synced: %04d-%02d-%02d %02d:%02d:%02d", tm_info->tm_year + TM_YEAR_BASE,
-                     tm_info->tm_mon + 1, tm_info->tm_mday, tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
-            _lastStatus = buf.data();
-
-            Logger::info(_lastStatus.c_str(), TAG);
-
-            sntp_stop();
-
-            return;
+            delay(POLL_DELAY_MS);
         }
 
         std::array<char, STATUS_BUFFER_SIZE> retryBuf;
-        snprintf(retryBuf.data(), retryBuf.size(), "NTP sync attempt %d failed", attempt);
+        snprintf(retryBuf.data(), retryBuf.size(), "NTP sync attempt %d failed", _attempt);
         Logger::warn(retryBuf.data(), TAG);
-
-        delay(static_cast<unsigned long>(RETRY_BASE_DELAY_MS) * static_cast<unsigned long>(attempt));
     }
 
-    _lastOk = false;
-    _lastStatus = "sync failed";
-
-    sntp_stop();
-
-    Logger::error("NTP sync failed after retries", TAG);
+    recordFailure();
 }
 
 /**

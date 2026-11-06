@@ -24,6 +24,7 @@
 #include "config/SecureStorage.h"
 #include <string>
 #include <cstdint>
+#include "ui/settings.h"
 #include <SPI.h>
 
 // LCD configuration defaults for hellocubic lite
@@ -62,6 +63,8 @@ class ConfigManager {
     SecureStorage secure;
     uint8_t lcd_rotation = 4;
     std::string ntp_server;
+    std::string timezone = "UTC0";  // POSIX TZ string, e.g. "GMT0BST,M3.5.0/1,M10.5.0"
+    UiSettings ui;
 
     const char* getNtpServer() const { return ntp_server.c_str(); }
     void setNtpServer(const char* s) {

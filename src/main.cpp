@@ -19,7 +19,6 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
-#include <Arduino_GFX_Library.h>
 #include <SPI.h>
 #include <ESP8266HTTPUpdateServer.h>
 
@@ -28,16 +27,15 @@
 #include "config/ConfigManager.h"
 #include "wireless/WiFiManager.h"
 #include "display/DisplayManager.h"
+#include "net/UsageManager.h"
+#include "ui/BootScreen.h"
+#include "ui/ChannelManager.h"
 #include "web/Webserver.h"
 #include "web/Api.h"
 #include "ntp/NTPClient.h"
 #include "boot/RescueMode.h"
-#include "dashboard/DashboardManager.h"
+#include "system/Diagnostics.h"
 #include <array>
-
-#ifndef METRICS_URL
-#define METRICS_URL ""
-#endif
 
 ConfigManager configManager;
 const char* AP_SSID = "GeekMagic";
@@ -51,11 +49,6 @@ static constexpr size_t MSG_BUF_SIZE = 96;
 
 static constexpr uint32_t SERIAL_BAUD_RATE = 115200;
 static constexpr uint32_t BOOT_DELAY_MS = 200;
-static constexpr int LOADING_BAR_TEXT_X = 50;
-static constexpr int LOADING_BAR_TEXT_Y = 80;
-static constexpr int LOADING_BAR_Y = 110;
-static constexpr int LOADING_DELAY_MS = 1000;
-static constexpr const char* METRICS_ENDPOINT = METRICS_URL;
 
 Webserver* webserver = nullptr;
 NTPClient* ntpClient = nullptr;
@@ -103,9 +96,8 @@ void setup() {
     delay(BOOT_DELAY_MS);
     Serial.println("");
     Logger::info(("GeekMagic Open Firmware " + String(PROJECT_VER_STR)).c_str());
+    Diagnostics::checkpoint(F("start"));
 
-    constexpr int TOTAL_STEPS = 5;
-    int step = 0;
     const bool littleFsMounted = LittleFS.begin();
     bool littleFsReadyForStatic = littleFsMounted;
 
@@ -122,6 +114,7 @@ void setup() {
     if (configManager.secure.begin()) {
         Logger::info("SecureStorage initialized successfully", "ConfigManager");
     }
+    Diagnostics::checkpoint(F("secure_storage"));
 
     if (configManager.load()) {
         Logger::info("Configuration loaded successfully");
@@ -134,37 +127,30 @@ void setup() {
         return;
     }
 
-    step += 2;
-
     DisplayManager::begin();
-
-    DisplayManager::drawLoadingBar((float)step / TOTAL_STEPS, LOADING_BAR_Y);
-
-    step++;
-
-    DisplayManager::drawTextWrapped(LOADING_BAR_TEXT_X, LOADING_BAR_TEXT_Y, "Starting...", 2, LCD_WHITE, LCD_BLACK,
-                                    true);
-    DisplayManager::drawLoadingBar((float)step / TOTAL_STEPS, LOADING_BAR_Y);
-    step++;
+    Diagnostics::checkpoint(F("display_begin"));
 
     wifiManager = new WiFiManager(configManager.getSSID(), configManager.getPassword(), AP_SSID, AP_PASSWORD);
     wifiManager->begin();
+    if (wifiManager->isApMode()) {
+        BootScreen::showSetup(AP_SSID, AP_PASSWORD, configManager.getSSID());
+    } else {
+        BootScreen::showOnline("starting up");
+    }
+    Diagnostics::checkpoint(F("wifi_begin"));
 
     ntpClient = new NTPClient();
     ntpClient->begin();
-
-    DisplayManager::drawLoadingBar((float)step / TOTAL_STEPS, LOADING_BAR_Y);
-
-    step++;
+    Diagnostics::checkpoint(F("ntp_begin"));
 
     webserver = new Webserver();
     webserver->begin();
+    Diagnostics::checkpoint(F("webserver_begin"));
 
     initial_free_heap = ESP.getFreeHeap();  // NOLINT(readability-static-accessed-through-instance)
 
-    DisplayManager::drawLoadingBar((float)step / TOTAL_STEPS, LOADING_BAR_Y);
-
     registerApiEndpoints(webserver);
+    Diagnostics::checkpoint(F("api_registered"));
 
     if (!littleFsReadyForStatic) {
         httpUpdater.setup(&webserver->raw(), "/legacyupdate");
@@ -175,15 +161,10 @@ void setup() {
         webserver->registerGenericStaticFallback("/web", true);
     }
 
-    DisplayManager::drawLoadingBar(1.0F, LOADING_BAR_Y);
-
-    delay(LOADING_DELAY_MS);
-
-    DisplayManager::drawStartup(wifiManager->getIP().toString());
-
-    if (METRICS_ENDPOINT[0] != '\0' && WiFiManager::isConnected() && !wifiManager->isApMode()) {
-        DashboardManager::begin(METRICS_ENDPOINT);
-    }
+    UsageManager::begin();  // fills the credential flags that the channels read
+    ChannelManager::begin(wifiManager->isApMode());
+    ChannelManager::applySettings(configManager.ui);
+    Diagnostics::checkpoint(F("channels_begin"));
 
     // enable watchdog before going to loop()
     // 2 seconds should be way more than the main loop needs to do stuff
@@ -210,12 +191,8 @@ void loop() {
         ntpClient->loop();
     }
 
-    DisplayManager::update();
-
-    if (METRICS_ENDPOINT[0] != '\0' && wifiManager != nullptr && WiFiManager::isConnected() &&
-        !wifiManager->isApMode()) {
-        DashboardManager::update();
-    }
+    ChannelManager::update();
+    UsageManager::update();  // blocks for a few seconds when a fetch is due
 
     static unsigned long last_free_heap_log = 0;
     static constexpr unsigned long FREE_HEAP_LOG_INTERVAL_MS = 10000UL;

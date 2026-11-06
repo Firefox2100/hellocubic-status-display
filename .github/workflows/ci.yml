@@ -110,6 +110,9 @@ jobs:
       - name: Build firmware
         run: pio run
 
+      - name: Host unit tests (notification queue, usage fetch policy, cache format)
+        run: ./scripts/host-tests.sh
+
       - name: Upload firmware artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:

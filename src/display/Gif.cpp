@@ -19,7 +19,7 @@
 
 #include "display/Gif.h"
 #include "display/DisplayManager.h"
-#include <Arduino_GFX_Library.h>
+#include <TFT_eSPI.h>
 #include <array>
 static constexpr uint32_t GIF_MAX_MS_PER_FILE = 20000U;
 static constexpr uint8_t GIF_TARGET_FPS = 30U;
@@ -193,7 +193,7 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
         return;
     }
 
-    auto* tft = reinterpret_cast<Arduino_TFT*>(gfx);
+    auto* tft = gfx;
     if (pDraw->y == 0) {
         tft->startWrite();
 
@@ -325,9 +325,9 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
                     lineBuf[static_cast<size_t>(i)] = fillBg;
                 }
 
-                tft->writeAddrWindow(static_cast<int16_t>(uStart), static_cast<int16_t>(yPos),
+                tft->setAddrWindow(static_cast<int16_t>(uStart), static_cast<int16_t>(yPos),
                                      static_cast<uint16_t>(uLen), 1);
-                tft->writePixels(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(uLen));
+                tft->pushColors(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(uLen), true);
 
             } else {
                 if (pDraw->ucHasTransparency == 0) {
@@ -346,9 +346,9 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
                         }
                     }
 
-                    tft->writeAddrWindow(static_cast<int16_t>(uStart), static_cast<int16_t>(yPos),
+                    tft->setAddrWindow(static_cast<int16_t>(uStart), static_cast<int16_t>(yPos),
                                          static_cast<uint16_t>(uLen), 1);
-                    tft->writePixels(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(uLen));
+                    tft->pushColors(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(uLen), true);
 
                     yield();
                 } else {
@@ -373,9 +373,9 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
                             }
                         }
 
-                        tft->writeAddrWindow(static_cast<int16_t>(uStart), static_cast<int16_t>(yPos),
+                        tft->setAddrWindow(static_cast<int16_t>(uStart), static_cast<int16_t>(yPos),
                                              static_cast<uint16_t>(uLen), 1);
-                        tft->writePixels(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(uLen));
+                        tft->pushColors(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(uLen), true);
 
                         yield();
                         yield();
@@ -403,10 +403,9 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
 
                             const auto dstX = static_cast<int>(xPos + visStart + (idx - runLen));
 
-                            tft->writeAddrWindow(static_cast<int16_t>(dstX), static_cast<int16_t>(yPos),
+                            tft->setAddrWindow(static_cast<int16_t>(dstX), static_cast<int16_t>(yPos),
                                                  static_cast<uint16_t>(runLen), 1);
-                            tft->writePixels(reinterpret_cast<uint16_t*>(lineBuf.data()),
-                                             static_cast<uint32_t>(runLen));
+                            tft->pushColors(reinterpret_cast<uint16_t*>(lineBuf.data()), static_cast<uint32_t>(runLen), true);
 
                             yield();
                         }
@@ -544,7 +543,7 @@ auto Gif::update() -> void {
 
     m_targetMs = targetMs;
 
-    if ((millis() - m_startMs) > GIF_MAX_MS_PER_FILE) {
+    if (!m_loopEnabled && (millis() - m_startMs) > GIF_MAX_MS_PER_FILE) {
         m_gif->close();
         m_playing = false;
         m_playRequested = false;

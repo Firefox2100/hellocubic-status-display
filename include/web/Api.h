@@ -20,6 +20,8 @@
 #ifndef API_H
 #define API_H
 
+#include <ArduinoJson.h>
+
 #include "web/Webserver.h"
 
 void setCorsHeaders(Webserver* webserver);
@@ -45,6 +47,21 @@ void handleNtpConfigGet(Webserver* webserver);
 void handleNtpConfigSet(Webserver* webserver);
 void handleDisplayRotationGet(Webserver* webserver);
 void handleDisplayRotationSet(Webserver* webserver);
+
+void handleSystemGet(Webserver* webserver);
+void handleDisplayDebug(Webserver* webserver);
+void handleTlsSelfTest(Webserver* webserver);
+void handleUsageGet(Webserver* webserver);
+void handleUsageRefresh(Webserver* webserver);
+void handleUiGet(Webserver* webserver);
+void handleUiSet(Webserver* webserver);
+void handleCredentialsGet(Webserver* webserver);
+void handleCredentialsSet(Webserver* webserver);
+
+// Shared with PushApi.cpp
+auto requireBearerToken(Webserver* webserver) -> bool;
+void sendJsonDoc(Webserver* webserver, int code, JsonDocument& doc);
+void registerPushEndpoints(Webserver* webserver);
 
 void handleTokenCheck(Webserver* webserver);
 void handleTokenSave(Webserver* webserver);

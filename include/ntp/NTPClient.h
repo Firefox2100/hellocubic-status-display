@@ -29,6 +29,11 @@ class NTPClient {
     void loop();
     bool syncNow();
 
+    /**
+     * @brief Apply a POSIX TZ string (e.g. "GMT0BST,M3.5.0/1,M10.5.0") to localtime()
+     */
+    static void applyTimezone(const char* posixTz);
+
     bool lastSyncOk() const;
     time_t lastSyncTime() const;
     String lastStatus() const;
@@ -40,7 +45,17 @@ class NTPClient {
     bool _lastOk = false;
     String _lastStatus = "never synced";
     unsigned long _nextSyncAttemptMs = 0;
+
+    // Non-blocking sync state machine driven by loop()
+    bool _syncing = false;
+    uint8_t _attempt = 0;
+    unsigned long _attemptStartMs = 0;
+
     void performSync();
+    void startAttempt();
+    void pollSync();
+    void recordSuccess();
+    void recordFailure();
 };
 
 #endif  // NTP_CLIENT_H

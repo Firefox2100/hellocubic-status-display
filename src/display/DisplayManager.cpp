@@ -23,7 +23,6 @@
 #include <algorithm>
 #include <Arduino.h>
 
-#include "project_version.h"
 #include "display/DisplayManager.h"
 #include "config/ConfigManager.h"
 #include "display/Gif.h"
@@ -32,12 +31,15 @@ static Gif* g_gif = nullptr;
 
 extern ConfigManager configManager;
 
-static Arduino_HWSPI g_lcdBus = Arduino_HWSPI(LCD_DC_GPIO, -1, &SPI, true);
-static Arduino_ST7789 g_lcd = Arduino_ST7789(&g_lcdBus, -1, 0, true, LCD_W, LCD_H);
+TFT_eSPI tft = TFT_eSPI();
 
 static constexpr uint32_t LCD_HARDWARE_RESET_DELAY_MS = 120;
 static constexpr uint32_t LCD_BEGIN_DELAY_MS = 10;
 static constexpr int16_t DISPLAY_PADDING = 10;
+static constexpr uint8_t DEFAULT_BRIGHTNESS_PCT = 100;
+static constexpr uint32_t BACKLIGHT_PWM_HZ = 1000;
+static constexpr uint32_t BACKLIGHT_PWM_RANGE = 1023;
+static constexpr uint8_t PERCENT_MAX = 100;
 static constexpr int16_t DISPLAY_INFO_Y = 100;
 
 static constexpr int WRAP_MAX_CHARS = 128;
@@ -207,31 +209,28 @@ static constexpr uint8_t ST7789_ADDR_END_LOW = 0xEF;
  *
  * @return Pointer to the Arduino_GFX instance
  */
-auto DisplayManager::getGfx() -> Arduino_GFX* { return &g_lcd; }
+auto DisplayManager::getGfx() -> TFT_eSPI* { return &tft; }
 
 /**
  * @brief Turn the LCD backlight on
  *
  * @return void
  */
-static inline void lcdBacklightOn() {
-    pinMode((uint8_t)LCD_BACKLIGHT_GPIO, OUTPUT);
-    digitalWrite((uint8_t)LCD_BACKLIGHT_GPIO, LCD_BACKLIGHT_ACTIVE_LOW ? LOW : HIGH);
-}
+static inline void lcdBacklightOn() { DisplayManager::setBacklight(DEFAULT_BRIGHTNESS_PCT); }
 
 /**
  * @brief Write a single command byte to the ST7789 via the data bus
  *
  * @return void
  */
-static inline void ST7789_WriteCommand(uint8_t cmd) { g_lcdBus.writeCommand(cmd); }
+static inline void ST7789_WriteCommand(uint8_t cmd) { tft.writecommand(cmd); }
 
 /**
  * @brief Write a single data byte to the ST7789 via the data bus
  *
  * @return void
  */
-static inline void ST7789_WriteData(uint8_t data) { g_lcdBus.write(data); }
+static inline void ST7789_WriteData(uint8_t data) { tft.writedata(data); }
 
 /**
  * @brief Run a vendor-specific initialization sequence for the ST7789 panel
@@ -259,7 +258,6 @@ static inline void ST7789_WriteData(uint8_t data) { g_lcdBus.write(data); }
  * @return void
  */
 static void lcdRunVendorInit() {
-    g_lcdBus.beginWrite();
 
     ST7789_WriteCommand(ST7789_SLEEP_OUT);
     delay(ST7789_SLEEP_DELAY_MS);
@@ -344,7 +342,29 @@ static void lcdRunVendorInit() {
 
     ST7789_WriteCommand(ST7789_RAMWR);
 
-    g_lcdBus.endWrite();
+}
+
+/**
+ * @brief Apply one of the 8 rotation/mirror modes through MADCTL (same table the previous driver used).
+ *
+ * Rotation 4 (mirror X) is the one the HelloCube needs: the prism on top flips the image back.
+ * TFT_eSPI only knows rotations 0-3, so MADCTL is written directly.
+ */
+static void applyRotation(uint8_t rotation) {
+    constexpr uint8_t MADCTL_MY = 0x80;
+    constexpr uint8_t MADCTL_MX = 0x40;
+    constexpr uint8_t MADCTL_MV = 0x20;
+    constexpr std::array<uint8_t, 8> MADCTL_BY_ROTATION = {0x00,
+                                                           MADCTL_MX | MADCTL_MV,
+                                                           MADCTL_MX | MADCTL_MY,
+                                                           MADCTL_MY | MADCTL_MV,
+                                                           MADCTL_MX,
+                                                           MADCTL_MX | MADCTL_MY | MADCTL_MV,
+                                                           MADCTL_MY,
+                                                           MADCTL_MV};
+    tft.setRotation(rotation & 0x03);  // keeps TFT_eSPI's own width/height bookkeeping in step
+    tft.writecommand(ST7789_MEMORY_ACCESS_CONTROL);
+    tft.writedata(MADCTL_BY_ROTATION.at(rotation % MADCTL_BY_ROTATION.size()));
 }
 
 /**
@@ -354,46 +374,31 @@ static void lcdRunVendorInit() {
  *
  * @return void
  */
-static void lcdHardReset() {
-    pinMode((uint8_t)LCD_RST_GPIO, OUTPUT);
-    digitalWrite((uint8_t)LCD_RST_GPIO, HIGH);
-    delay(LCD_HARDWARE_RESET_DELAY_MS);
-    digitalWrite((uint8_t)LCD_RST_GPIO, LOW);
-    delay(LCD_HARDWARE_RESET_DELAY_MS);
-    digitalWrite((uint8_t)LCD_RST_GPIO, HIGH);
-    delay(LCD_HARDWARE_RESET_DELAY_MS);
-}
+static void lcdBringUp(bool vendorInit, bool invert) {
+    Logger::info((String("Initialization started, vendorInit=") + (vendorInit ? "yes" : "no") + " invert=" +
+                  (invert ? "yes" : "no"))
+                     .c_str(),
+                 "DisplayManager");
 
-/**
- * @brief Ensure the LCD is initialized and ready for drawing
- *
- * @return void
- */
-static void lcdEnsureInit() {
-    Logger::info("Initialization started", "DisplayManager");
+    const uint8_t rotation = configManager.getLCDRotationSafe();
 
+    // Same sequence glimmer uses on the same panel: TFT_eSPI's own init (reset, SPI mode 3, ST7789 setup), then
+    // inversion, then the backlight. The cube's original vendor init sequence is optional and off by default.
+    tft.init();
+    if (vendorInit) {
+        lcdRunVendorInit();
+        delay(LCD_BEGIN_DELAY_MS);
+    }
+    applyRotation(rotation);
+    tft.invertDisplay(invert);
+    tft.fillScreen(LCD_BLACK);
+    tft.setTextColor(LCD_WHITE, LCD_BLACK);
     lcdBacklightOn();
 
-    uint8_t rotation = configManager.getLCDRotationSafe();
-
-    // SPI mode 3 is required. This toggles the pin from LOW to HIGH after reset, which my guess
-    // is after reset "initializes" the SPI interface of the display, as CS is tied to GND?
-    // ...strange that SPI_MODE0 will not work as the IC doesn't care about CLK's polarity
-    g_lcdBus.begin((int32_t)LCD_SPI_HZ, (int8_t)LCD_SPI_MODE);
-    lcdHardReset();
-    lcdRunVendorInit();
-    delay(LCD_BEGIN_DELAY_MS);
-
-    g_lcd.setRotation(rotation);
-
     Logger::info(
-        ("Width=" + String(g_lcd.width()) + " height=" + String(g_lcd.height()) + " rotation=" + String(rotation))
+        ("Width=" + String(tft.width()) + " height=" + String(tft.height()) + " rotation=" + String(rotation))
             .c_str(),
         "DisplayManager");
-
-    g_lcd.fillScreen(LCD_BLACK);
-    g_lcd.setTextColor(LCD_WHITE, LCD_BLACK);
-
     Logger::info("Initialization completed", "DisplayManager");
 }
 
@@ -483,8 +488,8 @@ static auto lcdWrapTextToBuffer(const String& text, int maxCharsPerLine, int max
  */
 static void lcdDrawTextWrapped(int16_t startX, int16_t startY, const String& text, uint8_t textSize, uint16_t fgColor,
                                uint16_t bgColor, bool clearBg) {
-    const auto screenW = static_cast<int16_t>(g_lcd.width());
-    const auto screenH = static_cast<int16_t>(g_lcd.height());
+    const auto screenW = static_cast<int16_t>(tft.width());
+    const auto screenH = static_cast<int16_t>(tft.height());
 
     if (startX < 0) {
         startX = 0;
@@ -525,16 +530,16 @@ static void lcdDrawTextWrapped(int16_t startX, int16_t startY, const String& tex
 
     if (clearBg) {
         const auto heightPixels = static_cast<int16_t>(static_cast<int>(lineCount) * static_cast<int>(charH));
-        g_lcd.fillRect(startX, startY, static_cast<int16_t>(screenW - startX), static_cast<int16_t>(heightPixels),
+        tft.fillRect(startX, startY, static_cast<int16_t>(screenW - startX), static_cast<int16_t>(heightPixels),
                        bgColor);
     }
 
-    g_lcd.setTextSize(textSize);
-    g_lcd.setTextColor(fgColor, bgColor);
+    tft.setTextSize(textSize);
+    tft.setTextColor(fgColor, bgColor);
 
     for (int li = 0; li < lineCount; ++li) {
-        g_lcd.setCursor(startX, static_cast<int16_t>(startY + li * charH));
-        g_lcd.print(lines[li].data());
+        tft.setCursor(startX, static_cast<int16_t>(startY + li * charH));
+        tft.print(lines[li].data());
     }
 }
 
@@ -545,7 +550,31 @@ static void lcdDrawTextWrapped(int16_t startX, int16_t startY, const String& tex
  *
  * @return void
  */
-auto DisplayManager::begin() -> void { lcdEnsureInit(); }
+auto DisplayManager::begin() -> void { lcdBringUp(false, true); }
+
+auto DisplayManager::reinit(bool vendorInit, bool invert) -> void { lcdBringUp(vendorInit, invert); }
+
+/**
+ * @brief Set the backlight brightness. The backlight is active-low PWM on GPIO5: duty 0 is full brightness.
+ *
+ * @param percent 0 (off) to 100 (full)
+ */
+auto DisplayManager::setBacklight(uint8_t percent) -> void {
+    static bool pwmReady = false;
+    if (!pwmReady) {
+        pinMode(static_cast<uint8_t>(LCD_BACKLIGHT_GPIO), OUTPUT);
+        analogWriteFreq(BACKLIGHT_PWM_HZ);
+        analogWriteRange(BACKLIGHT_PWM_RANGE);
+        pwmReady = true;
+    }
+    const uint32_t clamped = percent > PERCENT_MAX ? PERCENT_MAX : percent;
+    const uint32_t duty = BACKLIGHT_PWM_RANGE - (clamped * BACKLIGHT_PWM_RANGE / PERCENT_MAX);
+    analogWrite(static_cast<uint8_t>(LCD_BACKLIGHT_GPIO), static_cast<int>(duty));
+}
+
+auto DisplayManager::setInversion(bool enabled) -> void { tft.invertDisplay(enabled); }
+
+auto DisplayManager::fillScreenColor(uint16_t color) -> void { tft.fillScreen(color); }
 
 /**
  * @brief Apply a new display rotation at runtime
@@ -554,51 +583,10 @@ auto DisplayManager::begin() -> void { lcdEnsureInit(); }
  *
  * @return void
  */
-auto DisplayManager::setRotation(uint8_t rotation, String currentIP) -> void {
-    g_lcd.setRotation(rotation);
-    DisplayManager::drawStartup(currentIP);
+auto DisplayManager::setRotation(uint8_t rotation) -> void {
+    applyRotation(rotation);
 
     Logger::info(("Rotation set to " + String(rotation)).c_str(), "DisplayManager");
-}
-
-/**
- * @brief Draw the startup screen on the LCD
- *
- * @return void
- */
-auto DisplayManager::drawStartup(String currentIP) -> void {
-    int constexpr rgbDelayMs = 1000;
-
-    g_lcd.fillScreen(LCD_RED);
-    delay(rgbDelayMs);
-    g_lcd.fillScreen(LCD_GREEN);
-    delay(rgbDelayMs);
-    g_lcd.fillScreen(LCD_BLUE);
-    delay(rgbDelayMs);
-
-    g_lcd.fillScreen(LCD_BLACK);
-
-    int constexpr titleY = 10;
-    int constexpr fontSize = 2;
-
-    DisplayManager::drawTextWrapped(DISPLAY_PADDING, titleY, "GeekMagic Open Firmware", fontSize, LCD_WHITE, LCD_BLACK,
-                                    false);
-    DisplayManager::drawTextWrapped(DISPLAY_PADDING, titleY + THREE_LINES_SPACE, String(PROJECT_VER_STR), fontSize,
-                                    LCD_WHITE, LCD_BLACK, false);
-    DisplayManager::drawTextWrapped(DISPLAY_PADDING, (titleY + THREE_LINES_SPACE + TWO_LINES_SPACE), "IP: " + currentIP,
-                                    fontSize, LCD_WHITE, LCD_BLACK, false);
-
-    const int16_t box = 40;
-    const int16_t gap = 20;
-    const int16_t boxY = titleY + (THREE_LINES_SPACE * 2) + ONE_LINE_SPACE;
-
-    g_lcd.fillRect(DISPLAY_PADDING, boxY, box, box, LCD_RED);
-    g_lcd.fillRect((int16_t)(DISPLAY_PADDING + box + gap), boxY, box, box, LCD_GREEN);
-    g_lcd.fillRect((int16_t)(DISPLAY_PADDING + (box + gap) * 2), boxY, box, box, LCD_BLUE);
-
-    yield();
-
-    Logger::info("Startup screen drawn", "DisplayManager");
 }
 
 /**
@@ -637,25 +625,26 @@ void DisplayManager::drawLoadingBar(float progress, int yPos, int barWidth, int 
     auto barWidth16 = static_cast<int16_t>(barWidth);
     auto barHeight16 = static_cast<int16_t>(barHeight);
 
-    g_lcd.fillRect(barXPos16, yPos16, barWidth16, barHeight16, bgColor);
+    tft.fillRect(barXPos16, yPos16, barWidth16, barHeight16, bgColor);
 
     auto fillWidthF = static_cast<float>(barWidth) * progress;
     auto fillWidth16 = static_cast<int16_t>(fillWidthF);
     if (fillWidth16 > 0) {
-        g_lcd.fillRect(barXPos16, yPos16, fillWidth16, barHeight16, fgColor);
+        tft.fillRect(barXPos16, yPos16, fillWidth16, barHeight16, fgColor);
     }
 
     yield();
 }
 
 /**
- * @brief Play a single GIF file in full screen mode (blocking)
+ * @brief Start looping a GIF in full screen mode (non-blocking)
+ *
+ * Playback is driven by DisplayManager::update(), which must be called from loop().
  *
  * @param path Path to the GIF file on LittleFS
- * @param timeMs Duration to play the GIF in milliseconds (0 = play full GIF)
- * @return true if played successfully, false on error
+ * @return true if playback started, false on error
  */
-auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> bool {
+auto DisplayManager::playGifFullScreen(const String& path) -> bool {
     if (g_gif == nullptr) {
         g_gif = new Gif();
         if (g_gif == nullptr) {
@@ -672,43 +661,31 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
 
     DisplayManager::clearScreen();
 
-    g_gif->setLoopEnabled(timeMs == 0);
+    g_gif->setLoopEnabled(true);
 
-    const bool started = g_gif->playOne(path);
-    if (!started) {
-        return false;
-    }
-
-    if (timeMs == 0) {
-        return true;
-    }
-
-    const uint32_t startMs = millis();
-    const uint32_t endMs = startMs + timeMs;
-
-    while (g_gif->isPlaying() && static_cast<int32_t>(millis() - endMs) < 0) {
-        g_gif->update();
-        yield();
-    }
-
-    if (g_gif->isPlaying()) {
-        g_gif->stop();
-    }
-
-    return true;
+    return g_gif->playOne(path);
 }
+
+/**
+ * @brief Check whether a GIF is currently being played
+ *
+ * @return true if a GIF is playing
+ */
+auto DisplayManager::isGifPlaying() -> bool { return g_gif != nullptr && g_gif->isPlaying(); }
 
 /**
  * @brief Stop GIF playback if playing
  *
  * @return true
  */
-auto DisplayManager::stopGif() -> bool {
+auto DisplayManager::stopGif(bool clear) -> bool {
     if (g_gif != nullptr) {
         g_gif->stop();
     }
 
-    DisplayManager::clearScreen();
+    if (clear) {
+        DisplayManager::clearScreen();
+    }
 
     return true;
 }
@@ -728,4 +705,4 @@ auto DisplayManager::update() -> void {
  *
  * @return void
  */
-auto DisplayManager::clearScreen() -> void { g_lcd.fillScreen(LCD_BLACK); }
+auto DisplayManager::clearScreen() -> void { tft.fillScreen(LCD_BLACK); }
