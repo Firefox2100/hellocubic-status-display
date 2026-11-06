@@ -16,6 +16,7 @@
 #include "ui/BootScreen.h"
 #include "channel.h"
 #include "display.h"
+#include "display/CgfPlayer.h"
 #include "display/DisplayManager.h"
 #include "system/Diagnostics.h"
 #include "ui/Presence.h"
@@ -134,6 +135,14 @@ void chGifDraw([[maybe_unused]] const ChannelCtx& ctx) {
     }
 
     Display::releaseFont();  // frees a few KB of heap before the decoder allocates
+    if (CgfPlayer::isCgf(path)) {
+        // Pre-converted animation: needs ~1.5 KB, none of the decoder checks below apply
+        if (ESP.getMaxFreeBlockSize() < CgfPlayer::HEAP_NEEDED || !DisplayManager::playGifFullScreen(path)) {  // NOLINT(readability-static-accessed-through-instance)
+            blockGif("CGF animation failed to start");
+        }
+
+        return;
+    }
     const uint32_t freeHeap = ESP.getFreeHeap();          // NOLINT(readability-static-accessed-through-instance)
     const uint32_t maxBlock = ESP.getMaxFreeBlockSize();  // NOLINT(readability-static-accessed-through-instance)
     if (maxBlock < GIF_DECODER_BYTES || freeHeap < GIF_DECODER_BYTES + GIF_HEAP_HEADROOM) {

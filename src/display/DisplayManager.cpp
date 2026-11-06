@@ -25,6 +25,7 @@
 
 #include "display/DisplayManager.h"
 #include "config/ConfigManager.h"
+#include "display/CgfPlayer.h"
 #include "display/Gif.h"
 
 static Gif* g_gif = nullptr;
@@ -645,6 +646,15 @@ void DisplayManager::drawLoadingBar(float progress, int yPos, int barWidth, int 
  * @return true if playback started, false on error
  */
 auto DisplayManager::playGifFullScreen(const String& path) -> bool {
+    CgfPlayer::stop();
+    if (CgfPlayer::isCgf(path)) {
+        // Pre-converted animation: streams to the panel with ~1.5 KB, so the 24 KB decoder is not needed.
+        if (g_gif != nullptr) {
+            g_gif->stop();
+        }
+
+        return CgfPlayer::start(path);
+    }
     if (g_gif == nullptr) {
         g_gif = new Gif();
         if (g_gif == nullptr) {
@@ -671,7 +681,7 @@ auto DisplayManager::playGifFullScreen(const String& path) -> bool {
  *
  * @return true if a GIF is playing
  */
-auto DisplayManager::isGifPlaying() -> bool { return g_gif != nullptr && g_gif->isPlaying(); }
+auto DisplayManager::isGifPlaying() -> bool { return CgfPlayer::playing() || (g_gif != nullptr && g_gif->isPlaying()); }
 
 /**
  * @brief Stop GIF playback if playing
@@ -679,6 +689,7 @@ auto DisplayManager::isGifPlaying() -> bool { return g_gif != nullptr && g_gif->
  * @return true
  */
 auto DisplayManager::stopGif(bool clear) -> bool {
+    CgfPlayer::stop();
     if (g_gif != nullptr) {
         g_gif->stop();
     }
@@ -695,6 +706,7 @@ auto DisplayManager::stopGif(bool clear) -> bool {
  * @return void
  */
 auto DisplayManager::update() -> void {
+    CgfPlayer::update();
     if (g_gif != nullptr) {
         g_gif->update();
     }

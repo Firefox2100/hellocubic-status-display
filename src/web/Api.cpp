@@ -473,7 +473,7 @@ void handleListGifs(Webserver* webserver) {
 
         while (dir.next()) {
             String name = dir.fileName();
-            if (name.endsWith(".gif") || name.endsWith(".GIF")) {
+            if (name.endsWith(".gif") || name.endsWith(".GIF") || name.endsWith(".cgf")) {
                 JsonObject fileObj = files.add<JsonObject>();
 
                 fileObj["name"] = name;            // NOLINT(readability-misplaced-array-index)
