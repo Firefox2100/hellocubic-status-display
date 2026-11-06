@@ -63,6 +63,7 @@ auto requireBearerToken(Webserver* webserver) -> bool;
 void sendJsonDoc(Webserver* webserver, int code, JsonDocument& doc);
 void registerPushEndpoints(Webserver* webserver);
 void registerEventEndpoints(Webserver* webserver);
+void registerPresenceEndpoints(Webserver* webserver);
 
 void handleTokenCheck(Webserver* webserver);
 void handleTokenSave(Webserver* webserver);

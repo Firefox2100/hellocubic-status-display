@@ -18,6 +18,7 @@
 #include "display.h"
 #include "display/DisplayManager.h"
 #include "system/Diagnostics.h"
+#include "ui/Presence.h"
 
 // Channels implemented in src/glimmer/ch_*.cpp
 extern auto chClockEnabled(const ChannelCtx& ctx) -> bool;
@@ -35,6 +36,12 @@ extern void chCodexTick(const ChannelCtx& ctx);
 extern auto chAgentsEnabled(const ChannelCtx& ctx) -> bool;
 extern void chAgentsDraw(const ChannelCtx& ctx);
 extern void chAgentsTick(const ChannelCtx& ctx);
+
+// Presence screens (src/ui/PresenceScreens.cpp)
+extern void presenceBusyDraw(const ChannelCtx& ctx);
+extern void presenceAwayDraw(const ChannelCtx& ctx);
+extern auto presenceEnabledBusy(const ChannelCtx& ctx) -> bool;
+extern auto presenceEnabledAway(const ChannelCtx& ctx) -> bool;
 
 namespace {
 constexpr const char* LOG_TAG = "ChannelManager";
@@ -83,6 +90,9 @@ auto gifPath() -> String {
     if (!g_manualGif.isEmpty()) {
         return g_manualGif;
     }
+    if (Presence::mode() == Presence::Mode::Relaxing && !Presence::gif().isEmpty()) {
+        return String(GIF_DIR) + Presence::gif();
+    }
     if (!g_settings.idleGif.empty()) {
         return String(GIF_DIR) + g_settings.idleGif.c_str();
     }
@@ -94,10 +104,12 @@ auto chGifEnabled(const ChannelCtx& ctx) -> bool {
     if (!g_manualGif.isEmpty()) {
         return true;
     }
-    if (ctx.settings->idleMode != "gif" && ctx.settings->idleMode != "cycle") {
+    const bool relaxing = Presence::mode() == Presence::Mode::Relaxing;
+    if (!relaxing && ctx.settings->idleMode != "gif" && ctx.settings->idleMode != "cycle") {
         return false;
     }
-    if (g_settings.idleGif.empty() || !g_gifAllowed) {
+    if (!g_gifAllowed || (!relaxing && g_settings.idleGif.empty()) ||
+        (relaxing && Presence::gif().isEmpty() && g_settings.idleGif.empty())) {
         return false;
     }
 
@@ -146,7 +158,9 @@ void chGifTick([[maybe_unused]] const ChannelCtx& ctx) {
 
 // ── Channel table ───────────────────────────────────────────────────────────
 
-const std::array<Channel, 6> kChannels = {{
+const std::array<Channel, 8> kChannels = {{
+    {"Busy", presenceEnabledBusy, presenceBusyDraw, nullptr},
+    {"Away", presenceEnabledAway, presenceAwayDraw, nullptr},
     {"Attention", chAttentionEnabled, chAttentionDraw, chAttentionTick},
     {"Clock", chClockEnabled, chClockDraw, chClockTick},
     {"Claude", chClaudeEnabled, chClaudeDraw, chClaudeTick},
@@ -178,8 +192,23 @@ void recomputeActive() {
     const char* cur = currentName();
     const ChannelCtx ctx = makeCtx();
     g_activeCount = 0;
+    // Presence decides which family of channels may run; an attention card always can.
+    const Presence::Mode presence = Presence::mode();
+    const bool gifUsable = chGifEnabled(ctx);
     for (size_t i = 0; i < kChannels.size(); i++) {
-        if (kChannels.at(i).enabled(ctx)) {
+        const char* chName = kChannels.at(i).name;
+        bool allowed = true;
+        if (!sameName(chName, "Attention")) {
+            if (presence == Presence::Mode::Normal) {
+                allowed = true;
+            } else if (presence == Presence::Mode::Relaxing) {
+                // the GIF, or the clock when the GIF cannot run (low heap, missing file)
+                allowed = sameName(chName, "Gif") || (sameName(chName, "Clock") && !gifUsable);
+            } else {
+                allowed = sameName(chName, presence == Presence::Mode::Busy ? "Busy" : "Away");
+            }
+        }
+        if (allowed && kChannels.at(i).enabled(ctx)) {
             g_activeIdx.at(static_cast<size_t>(g_activeCount)) = static_cast<int>(i);
             g_activeCount++;
         }
@@ -413,6 +442,13 @@ void ChannelManager::update() {
     // and data: both change on their own, so watch for them.
     static uint32_t lastSyncCheck = 0;
     static uint32_t seenUsageRevision = 0;
+    static uint32_t seenPresenceRevision = 0;
+    if (Presence::revision() != seenPresenceRevision) {
+        seenPresenceRevision = Presence::revision();
+        g_manualGif = "";
+        g_gifBlockedUntil = 0;
+        refreshScreen(true);
+    }
     if (now - lastSyncCheck >= EXPIRE_MS) {
         lastSyncCheck = now;
         const bool synced = timeSynced();

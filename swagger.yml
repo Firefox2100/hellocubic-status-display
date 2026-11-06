@@ -1237,6 +1237,77 @@ paths:
       security:
         - bearerAuth: []
       description: "**Requires Authentication** - Event counts, clock state and what fires next. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/presence:
+    get:
+      summary: "Get the presence state (normal, busy, away, relaxing)"
+      operationId: "op_v1_get_api_v1_presence"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Presence"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Get the presence state (normal, busy, away, relaxing). This endpoint requires a valid bearer token in the Authorization header."
+    post:
+      summary: "Set the presence state; it is saved and survives a reboot"
+      operationId: "op_v1_post_api_v1_presence"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        404:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Presence"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Set the presence state; it is saved and survives a reboot. This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                mode:
+                  type: "string"
+                text:
+                  type: "string"
+                gif:
+                  type: "string"
+              example:
+                mode: "away"
+                text: "back at 14:00"
+        required: true
   /api/v1/token/check:
     get:
       summary: "Check bearer token validity"
@@ -1381,6 +1452,8 @@ components:
       bearerFormat: "Token"
       description: "Bearer token authentication. Include the token in the Authorization header as: Bearer <token>"
 tags:
+  - name: "Presence"
+    description: "API Presence endpoints"
   - name: "Events"
     description: "API Events endpoints"
   - name: "Credentials"

@@ -216,6 +216,7 @@ void registerApiEndpoints(Webserver* webserver) {
 
     registerPushEndpoints(webserver);
     registerEventEndpoints(webserver);
+    registerPresenceEndpoints(webserver);
 
     // @openapi {get} /token/check version=v1 group=Authentication summary="Check bearer token validity"
     // requiresAuth=true responses=200:application/json,401:application/json

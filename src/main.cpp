@@ -28,6 +28,7 @@
 #include "wireless/WiFiManager.h"
 #include "display/DisplayManager.h"
 #include "events/EventScheduler.h"
+#include "ui/Presence.h"
 #include "net/UsageManager.h"
 #include "ui/BootScreen.h"
 #include "ui/ChannelManager.h"
@@ -163,6 +164,7 @@ void setup() {
     }
 
     EventScheduler::begin();  // scheduled events: needs the filesystem, fires once the clock is set
+    Presence::begin();        // saved busy/away/relaxing state
     UsageManager::begin();  // fills the credential flags that the channels read
     ChannelManager::begin(wifiManager->isApMode());
     ChannelManager::applySettings(configManager.ui);
