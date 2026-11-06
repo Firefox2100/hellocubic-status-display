@@ -27,6 +27,7 @@
 #include "config/ConfigManager.h"
 #include "wireless/WiFiManager.h"
 #include "display/DisplayManager.h"
+#include "events/EventScheduler.h"
 #include "net/UsageManager.h"
 #include "ui/BootScreen.h"
 #include "ui/ChannelManager.h"
@@ -161,6 +162,7 @@ void setup() {
         webserver->registerGenericStaticFallback("/web", true);
     }
 
+    EventScheduler::begin();  // scheduled events: needs the filesystem, fires once the clock is set
     UsageManager::begin();  // fills the credential flags that the channels read
     ChannelManager::begin(wifiManager->isApMode());
     ChannelManager::applySettings(configManager.ui);
@@ -195,6 +197,7 @@ void loop() {
         wifiManager->loop();  // in access-point fallback: retry the saved Wi-Fi now and then
         ChannelManager::setApMode(wifiManager->isApMode());
     }
+    EventScheduler::update();
     ChannelManager::update();
     UsageManager::update();  // blocks for a few seconds when a fetch is due
 

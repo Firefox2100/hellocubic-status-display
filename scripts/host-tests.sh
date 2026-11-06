@@ -15,6 +15,12 @@ trap 'rm -rf "$OUT"' EXIT
 
 for test in test/host/*_test.cpp; do
     name="$(basename "$test" .cpp)"
-    g++ -std=c++17 -Wall -Wextra -Iinclude -Iinclude/glimmer -I"$ARDUINOJSON" "$test" -o "$OUT/$name"
+    # A test can need extra sources / include paths (for example a filesystem stand-in): put them in <name>.args
+    extra=""
+    if [ -f "test/host/${name}.args" ]; then
+        extra="$(cat "test/host/${name}.args")"
+    fi
+    # shellcheck disable=SC2086  # the args file holds several words on purpose
+    g++ -std=c++17 -Wall -Wextra -Iinclude -Iinclude/glimmer -I"$ARDUINOJSON" $extra "$test" -o "$OUT/$name"
     "$OUT/$name"
 done

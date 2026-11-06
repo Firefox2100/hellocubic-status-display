@@ -215,6 +215,7 @@ void registerApiEndpoints(Webserver* webserver) {
     webserver->route("/api/v1/usage/selftest", HTTP_POST, handleTlsSelfTest);
 
     registerPushEndpoints(webserver);
+    registerEventEndpoints(webserver);
 
     // @openapi {get} /token/check version=v1 group=Authentication summary="Check bearer token validity"
     // requiresAuth=true responses=200:application/json,401:application/json

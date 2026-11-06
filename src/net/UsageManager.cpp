@@ -15,6 +15,7 @@
 #include "config/ConfigManager.h"
 #include "config/CredentialStore.h"
 #include "display.h"
+#include "events/EventScheduler.h"
 #include "display/DisplayManager.h"
 #include "fetch_policy.h"
 #include "history.h"
@@ -37,6 +38,7 @@ constexpr uint32_t FIRST_FETCH_DELAY_MS = 15000;   // after the first update(): 
 constexpr uint32_t MIN_JOB_GAP_MS = 10000;          // heap fragments after a handshake; give it time to recover
 constexpr uint32_t HEAP_RETRY_MS = 15000;           // when a job was refused for lack of heap
 constexpr uint32_t CRED_RECHECK_MS = 10000;
+constexpr uint32_t EVENT_QUIET_S = 20;               // no fetch this close to a scheduled event
 constexpr uint32_t SETTLE_DELAY_MS = 20;
 constexpr uint32_t CLAUDE_ORG_PAUSE_MS = 150;
 constexpr long REASONABLE_EPOCH = 1000000000L;
@@ -577,6 +579,11 @@ void UsageManager::update() {
         }
     }
     if (now - g_lastJobEndMs < MIN_JOB_GAP_MS) {
+        return;
+    }
+    // A fetch blocks for seconds: do not start one right before a scheduled event is due
+    const long untilEvent = EventScheduler::secondsToNext();
+    if (untilEvent >= 0 && untilEvent <= static_cast<long>(EVENT_QUIET_S)) {
         return;
     }
 

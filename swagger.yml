@@ -991,6 +991,252 @@ paths:
                 host: "claude.ai"
                 verify: true
         required: true
+  /api/v1/events:
+    get:
+      summary: "List scheduled events (?offset=&limit=), or pull one with ?id="
+      operationId: "op_v1_get_api_v1_events"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        404:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Events"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - List scheduled events (?offset=&limit=), or pull one with ?id=. This endpoint requires a valid bearer token in the Authorization header."
+    post:
+      summary: "Insert or replace events (one object, or {events:[...]} up to 16)"
+      operationId: "op_v1_post_api_v1_events"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        409:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        413:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Events"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Insert or replace events (one object, or {events:[...]} up to 16). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                id:
+                  type: "string"
+                title:
+                  type: "string"
+                body:
+                  type: "string"
+                value:
+                  type: "string"
+                icon:
+                  type: "string"
+                kind:
+                  type: "string"
+                ttl_s:
+                  type: "number"
+                at:
+                  type: "string"
+                repeat:
+                  type: "string"
+                time:
+                  type: "string"
+                days:
+                  type: "array"
+                day:
+                  type: "number"
+              example:
+                id: "mtg-0845"
+                title: "Meeting in 15 min"
+                value: "09:00"
+                icon: "meeting"
+                kind: "warning"
+                ttl_s: 600
+                at: "2026-11-09T08:45:00Z"
+        required: true
+    delete:
+      summary: "Delete one event (?id=) or the whole schedule (?all=true)"
+      operationId: "op_v1_delete_api_v1_events"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        404:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Events"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Delete one event (?id=) or the whole schedule (?all=true). This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/events/replace:
+    post:
+      summary: "Replace the whole schedule, in parts if needed (begin/commit flags)"
+      operationId: "op_v1_post_api_v1_events_replace"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        400:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        409:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        413:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Events"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Replace the whole schedule, in parts if needed (begin/commit flags). This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                events:
+                  type: "array"
+                begin:
+                  type: "boolean"
+                commit:
+                  type: "boolean"
+              example:
+                begin: true
+                commit: true
+                events: []
+        required: true
+  /api/v1/events/fire:
+    post:
+      summary: "Fire an event now (?id=), for testing"
+      operationId: "op_v1_post_api_v1_events_fire"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        404:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Events"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Fire an event now (?id=), for testing. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/events/status:
+    get:
+      summary: "Event counts, clock state and what fires next"
+      operationId: "op_v1_get_api_v1_events_status"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Events"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Event counts, clock state and what fires next. This endpoint requires a valid bearer token in the Authorization header."
   /api/v1/token/check:
     get:
       summary: "Check bearer token validity"
@@ -1135,6 +1381,8 @@ components:
       bearerFormat: "Token"
       description: "Bearer token authentication. Include the token in the Authorization header as: Bearer <token>"
 tags:
+  - name: "Events"
+    description: "API Events endpoints"
   - name: "Credentials"
     description: "API Credentials endpoints"
   - name: "Display"
