@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "events/EventScheduler.h"
+#include "ui/Presence.h"
 
 #include <Arduino.h>
 #include <Logger.h>
@@ -34,6 +35,14 @@ auto timeSynced() -> bool { return time(nullptr) > REASONABLE_EPOCH; }
 
 /** @brief Put the event's card in the notification queue (same path as a push, so limits and priorities match). */
 void fire(const Events::Record& record) {
+    if (Events::isModeChange(record)) {
+        // Sets the idle screen only: a card on screen keeps the screen until it is gone (ChannelManager)
+        Presence::set(static_cast<Presence::Mode>(record.kind), record.title, record.body);
+        g_firedCount++;
+
+        return;
+    }
+
     JsonDocument card;
     card["id"] = String("evt:") + record.id;  // distinct from push ids; fits the 23-character card id
     card["title"] = record.title;

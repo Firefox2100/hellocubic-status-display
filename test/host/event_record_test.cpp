@@ -21,6 +21,35 @@ static bool rejects(const char* json, const char* mustMention = nullptr) {
     return mustMention == nullptr || strstr(error, mustMention) != nullptr;
 }
 
+static void testModeChange() {
+    Record r;
+    assert(!parse(R"({"id":"busy-9","mode":"busy","text":"Design review","at":1793953200})", r));
+    assert(isModeChange(r) && enabled(r) && r.kind == static_cast<uint8_t>(Presence::Mode::Busy));
+    assert(!strcmp(r.title, "Design review") && r.body[0] == '\0' && r.at == 1793953200u);
+
+    // round trip: comes back as a mode event, not as a card
+    JsonDocument out;
+    toJson(r, out, 0);
+    assert(!strcmp(out[0]["mode"] | "", "busy") && !strcmp(out[0]["text"] | "", "Design review"));
+    assert(out[0]["title"].isNull() && out[0]["kind"].isNull() && out[0]["at"].as<uint32_t>() == 1793953200u);
+
+    // recurring, relaxing with a gif, and "normal" with no text at all; no title is needed
+    assert(!parse(R"({"id":"fri-chill","mode":"relaxing","gif":"arch.cgf","repeat":"weekly","days":["fri"],"time":"16:30"})", r));
+    assert(isModeChange(r) && !strcmp(r.body, "arch.cgf") && r.repeat != 0);
+    assert(!parse(R"({"id":"free","mode":"normal","at":1793956800,"enabled":false})", r));
+    assert(isModeChange(r) && !enabled(r));  // "enabled" must not clear the mode flag
+
+    // validation
+    assert(rejects(R"({"id":"x","mode":"dnd","at":1793953200})", "mode"));
+    assert(rejects(R"({"id":"x","mode":7,"at":1793953200})", "mode"));
+    assert(rejects(R"({"id":"x","mode":"away","text":"this text is much longer than twenty-seven","at":1793953200})", "text"));
+    assert(rejects(R"({"id":"x","mode":"relaxing","gif":"../etc","at":1793953200})", "gif"));
+    assert(rejects(R"({"id":"x","mode":"busy"})", "at"));  // still needs a time
+
+    // a card without a title is still refused
+    assert(rejects(R"({"id":"x","at":1793953200})", "title"));
+}
+
 static void testOneOff() {
     Record r;
     assert(!parse(R"({"id":"mtg-1","title":"Meeting in 15 min","body":"Design review","value":"09:00","type":"meeting","kind":"warning","ttl_s":300,"at":1793953200})", r));
@@ -120,6 +149,7 @@ int main() {
     testRecurring();
     testValidation();
     testRoundTrip();
+    testModeChange();
     printf("event record ok\n");
     return 0;
 }

@@ -21,4 +21,6 @@ namespace Api {
     // Writes "STALE 14M" into buf when stale, "" otherwise.
     void staleText(time_t lastOk, const Settings& s, char* buf, size_t n);
     String formatCountdown(time_t t);
+    // One line of advice on which allowance to spend next (or a credential problem), "" when there is none.
+    void adviceText(const ClaudeData& cl, const CodexData& cx, char* buf, size_t n);
 }

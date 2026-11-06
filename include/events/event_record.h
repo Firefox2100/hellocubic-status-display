@@ -8,6 +8,8 @@
 
 #include <ArduinoJson.h>
 #include <stdint.h>
+
+#include "ui/presence_mode.h"
 #include <string.h>
 
 #include <ctime>
@@ -26,6 +28,10 @@ constexpr size_t VALUE_LEN = 15;
 constexpr uint16_t TTL_DEFAULT = 0xFFFF;  // "use the default lifetime of the card's kind"
 constexpr uint32_t MAX_TTL_S = 86400;
 constexpr uint8_t FLAG_ENABLED = 0x01;
+// A "mode" event does not show a card: it sets the presence state (busy, away, relaxing, normal). Stored in the same
+// record so existing files stay valid: `kind` holds the Presence::Mode, `title` the line shown under the big word, `body`
+// the GIF name.
+constexpr uint8_t FLAG_MODE = 0x02;
 constexpr uint16_t MAX_WEEKDAY = 6;
 constexpr int MAX_DAY_OF_MONTH = 31;
 constexpr size_t ISO_MIN_LEN = 20;  // "2026-11-07T09:00:00Z"
@@ -78,6 +84,8 @@ inline auto specOf(const Record& record) -> Schedule::Spec {
 }
 
 inline auto enabled(const Record& record) -> bool { return (record.flags & FLAG_ENABLED) != 0; }
+
+inline auto isModeChange(const Record& record) -> bool { return (record.flags & FLAG_MODE) != 0; }
 
 inline auto validId(const char* text) -> bool {
     const size_t length = text != nullptr ? strlen(text) : 0;
@@ -203,53 +211,73 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
     }
     detail::copyText(record.id, id);
 
-    const char* title = doc["title"].is<const char*>() ? doc["title"].as<const char*>() : "";
-    if (*title == '\0') {
-        return "title is required";
-    }
-    detail::copyText(record.title, title);
-    detail::copyText(record.body, doc["body"].is<const char*>() ? doc["body"].as<const char*>() : "");
-    detail::copyText(record.value, doc["value"].is<const char*>() ? doc["value"].as<const char*>() : "");
-
-    uint8_t kind = static_cast<uint8_t>(Attention::K_INFO);
-    if (doc["kind"].is<const char*>() && !detail::kindFromName(doc["kind"].as<const char*>(), kind)) {
-        return "unknown kind";
-    }
-    record.kind = kind;
-
-    const char* icon = doc["icon"].is<const char*>() ? doc["icon"].as<const char*>() : "";
-    if (*icon == '\0' && doc["type"].is<const char*>()) {
-        icon = doc["type"].as<const char*>();  // "type" is an alias of "icon", as for push cards
-    }
-    record.icon = static_cast<uint8_t>(Attention::iconFrom(icon));
-    if (*icon != '\0' && record.icon == Attention::ICON_NONE) {
-        return "unknown icon";
-    }
-
-    record.display = static_cast<uint8_t>(kind == Attention::K_PROGRESS ? Attention::SHOW_QUEUE : Attention::SHOW_INTERRUPT);
-    if (doc["display"].is<const char*>()) {
-        const char* display = doc["display"].as<const char*>();
-        if (strcmp(display, "queue") == 0) {
-            record.display = static_cast<uint8_t>(Attention::SHOW_QUEUE);
-        } else if (strcmp(display, "interrupt") == 0) {
-            record.display = static_cast<uint8_t>(Attention::SHOW_INTERRUPT);
-        } else {
-            return "display must be interrupt or queue";
+    const bool modeChange = !doc["mode"].isNull();
+    if (modeChange) {
+        Presence::Mode mode = Presence::Mode::Normal;
+        if (!doc["mode"].is<const char*>() || !Presence::modeFrom(doc["mode"].as<const char*>(), mode)) {
+            return "mode must be normal, busy, away or relaxing";
         }
-    }
-
-    if (!doc["ttl_s"].isNull()) {
-        const double ttl = doc["ttl_s"].as<double>();
-        if (!doc["ttl_s"].is<double>() || ttl < 0 || ttl > static_cast<double>(MAX_TTL_S)) {
-            return "ttl_s must be 0-86400";
+        const char* text = doc["text"].is<const char*>() ? doc["text"].as<const char*>() : "";
+        if (strlen(text) > Presence::TEXT_MAX) {
+            return "text is at most 27 characters";
         }
-        record.ttlS = static_cast<uint16_t>(ttl);
+        const char* gif = doc["gif"].is<const char*>() ? doc["gif"].as<const char*>() : "";
+        if (*gif != '\0' && !Presence::validGifName(gif)) {
+            return "gif must be a plain file name";
+        }
+        record.flags = static_cast<uint8_t>(record.flags | FLAG_MODE);
+        record.kind = static_cast<uint8_t>(mode);
+        detail::copyText(record.title, text);
+        detail::copyText(record.body, gif);
+    } else {
+        const char* title = doc["title"].is<const char*>() ? doc["title"].as<const char*>() : "";
+        if (*title == '\0') {
+            return "title is required";
+        }
+        detail::copyText(record.title, title);
+        detail::copyText(record.body, doc["body"].is<const char*>() ? doc["body"].as<const char*>() : "");
+        detail::copyText(record.value, doc["value"].is<const char*>() ? doc["value"].as<const char*>() : "");
+
+        uint8_t kind = static_cast<uint8_t>(Attention::K_INFO);
+        if (doc["kind"].is<const char*>() && !detail::kindFromName(doc["kind"].as<const char*>(), kind)) {
+            return "unknown kind";
+        }
+        record.kind = kind;
+
+        const char* icon = doc["icon"].is<const char*>() ? doc["icon"].as<const char*>() : "";
+        if (*icon == '\0' && doc["type"].is<const char*>()) {
+            icon = doc["type"].as<const char*>();  // "type" is an alias of "icon", as for push cards
+        }
+        record.icon = static_cast<uint8_t>(Attention::iconFrom(icon));
+        if (*icon != '\0' && record.icon == Attention::ICON_NONE) {
+            return "unknown icon";
+        }
+
+        record.display = static_cast<uint8_t>(kind == Attention::K_PROGRESS ? Attention::SHOW_QUEUE : Attention::SHOW_INTERRUPT);
+        if (doc["display"].is<const char*>()) {
+            const char* display = doc["display"].as<const char*>();
+            if (strcmp(display, "queue") == 0) {
+                record.display = static_cast<uint8_t>(Attention::SHOW_QUEUE);
+            } else if (strcmp(display, "interrupt") == 0) {
+                record.display = static_cast<uint8_t>(Attention::SHOW_INTERRUPT);
+            } else {
+                return "display must be interrupt or queue";
+            }
+        }
+
+        if (!doc["ttl_s"].isNull()) {
+            const double ttl = doc["ttl_s"].as<double>();
+            if (!doc["ttl_s"].is<double>() || ttl < 0 || ttl > static_cast<double>(MAX_TTL_S)) {
+                return "ttl_s must be 0-86400";
+            }
+            record.ttlS = static_cast<uint16_t>(ttl);
+        }
     }
     if (!doc["enabled"].isNull()) {
         if (!doc["enabled"].is<bool>()) {
             return "enabled must be true or false";
         }
-        record.flags = doc["enabled"].as<bool>() ? FLAG_ENABLED : 0;
+        record.flags = static_cast<uint8_t>((record.flags & ~FLAG_ENABLED) | (doc["enabled"].as<bool>() ? FLAG_ENABLED : 0));
     }
 
     // When: either one absolute instant, or a repeat rule with a local time of day
@@ -319,26 +347,8 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
     return nullptr;
 }
 
-/** @brief The stored fields (not the computed next firing time, which needs the clock). */
-inline void toJson(const Record& record, JsonDocument& doc, size_t index) {
-    doc[index]["id"] = record.id;
-    doc[index]["title"] = record.title;
-    if (record.body[0] != '\0') {
-        doc[index]["body"] = record.body;
-    }
-    if (record.value[0] != '\0') {
-        doc[index]["value"] = record.value;
-    }
-    doc[index]["kind"] = Attention::kindName(static_cast<Attention::Kind>(record.kind));
-    if (record.icon != Attention::ICON_NONE) {
-        doc[index]["icon"] = Attention::iconName(static_cast<Attention::Icon>(record.icon));
-    }
-    doc[index]["display"] = record.display == Attention::SHOW_QUEUE ? "queue" : "interrupt";
-    if (record.ttlS != TTL_DEFAULT) {
-        doc[index]["ttl_s"] = record.ttlS;
-    }
-    doc[index]["enabled"] = enabled(record);
-
+/** @brief The "when" fields: `at`, or the repeat rule, plus `last_fired`. */
+inline void writeWhen(const Record& record, JsonDocument& doc, size_t index) {
     const auto repeat = static_cast<Schedule::Repeat>(record.repeat);
     if (repeat == Schedule::Repeat::None) {
         doc[index]["at"] = record.at;
@@ -368,6 +378,42 @@ inline void toJson(const Record& record, JsonDocument& doc, size_t index) {
         }
     }
     doc[index]["last_fired"] = record.lastFired;
+}
+
+/** @brief The stored fields (not the computed next firing time, which needs the clock). */
+inline void toJson(const Record& record, JsonDocument& doc, size_t index) {
+    doc[index]["id"] = record.id;
+    if (isModeChange(record)) {
+        doc[index]["mode"] = Presence::modeName(static_cast<Presence::Mode>(record.kind));
+        if (record.title[0] != '\0') {
+            doc[index]["text"] = record.title;
+        }
+        if (record.body[0] != '\0') {
+            doc[index]["gif"] = record.body;
+        }
+        doc[index]["enabled"] = enabled(record);
+        writeWhen(record, doc, index);
+
+        return;
+    }
+    doc[index]["title"] = record.title;
+    if (record.body[0] != '\0') {
+        doc[index]["body"] = record.body;
+    }
+    if (record.value[0] != '\0') {
+        doc[index]["value"] = record.value;
+    }
+    doc[index]["kind"] = Attention::kindName(static_cast<Attention::Kind>(record.kind));
+    if (record.icon != Attention::ICON_NONE) {
+        doc[index]["icon"] = Attention::iconName(static_cast<Attention::Icon>(record.icon));
+    }
+    doc[index]["display"] = record.display == Attention::SHOW_QUEUE ? "queue" : "interrupt";
+    if (record.ttlS != TTL_DEFAULT) {
+        doc[index]["ttl_s"] = record.ttlS;
+    }
+    doc[index]["enabled"] = enabled(record);
+
+    writeWhen(record, doc, index);
 }
 
 }  // namespace Events

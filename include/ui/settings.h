@@ -26,6 +26,9 @@ struct UiSettings {
     // Claude / Codex usage screens (credentials are in CredentialStore, never here)
     bool showClaude = true;
     bool showCodex = true;
+    bool showTrend = true;             ///< 7-day burn per provider (needs history)
+    bool showAiDash = true;            ///< both allowances side by side, with advice (needs both configured)
+    bool showInfo = false;             ///< diagnostics page: signal, memory, uptime
     uint16_t refreshMin = 5;           ///< minutes between usage fetches
     bool claudeWeeklyHero = false;     ///< weekly window as the big number instead of the 5-hour one
     bool codexWeeklyHero = false;

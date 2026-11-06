@@ -34,6 +34,15 @@ extern void chClaudeTick(const ChannelCtx& ctx);
 extern auto chCodexEnabled(const ChannelCtx& ctx) -> bool;
 extern void chCodexDraw(const ChannelCtx& ctx);
 extern void chCodexTick(const ChannelCtx& ctx);
+extern auto chTrendEnabled(const ChannelCtx& ctx) -> bool;
+extern void chTrendDraw(const ChannelCtx& ctx);
+extern void chTrendTick(const ChannelCtx& ctx);
+extern auto chAiDashEnabled(const ChannelCtx& ctx) -> bool;
+extern void chAiDashDraw(const ChannelCtx& ctx);
+extern void chAiDashTick(const ChannelCtx& ctx);
+extern auto chInfoEnabled(const ChannelCtx& ctx) -> bool;
+extern void chInfoDraw(const ChannelCtx& ctx);
+extern void chInfoTick(const ChannelCtx& ctx);
 extern auto chAgentsEnabled(const ChannelCtx& ctx) -> bool;
 extern void chAgentsDraw(const ChannelCtx& ctx);
 extern void chAgentsTick(const ChannelCtx& ctx);
@@ -61,7 +70,7 @@ constexpr long REASONABLE_EPOCH = 1000000000L;
 constexpr uint32_t GIF_DECODER_BYTES = sizeof(AnimatedGIF);
 constexpr uint32_t GIF_HEAP_HEADROOM = 4096;
 constexpr int MAX_REDRAW_ATTEMPTS = 4;
-constexpr size_t MAX_CHANNELS = 8;
+constexpr size_t MAX_CHANNELS = 12;
 
 UiSettings g_settings;
 bool g_apMode = false;
@@ -167,13 +176,16 @@ void chGifTick([[maybe_unused]] const ChannelCtx& ctx) {
 
 // ── Channel table ───────────────────────────────────────────────────────────
 
-const std::array<Channel, 8> kChannels = {{
+const std::array<Channel, 11> kChannels = {{
     {"Busy", presenceEnabledBusy, presenceBusyDraw, nullptr},
     {"Away", presenceEnabledAway, presenceAwayDraw, nullptr},
     {"Attention", chAttentionEnabled, chAttentionDraw, chAttentionTick},
     {"Clock", chClockEnabled, chClockDraw, chClockTick},
     {"Claude", chClaudeEnabled, chClaudeDraw, chClaudeTick},
     {"Codex", chCodexEnabled, chCodexDraw, chCodexTick},
+    {"AiDash", chAiDashEnabled, chAiDashDraw, chAiDashTick},
+    {"Trend", chTrendEnabled, chTrendDraw, chTrendTick},
+    {"Info", chInfoEnabled, chInfoDraw, chInfoTick},
     {"Gif", chGifEnabled, chGifDraw, chGifTick},
     {"Agents", chAgentsEnabled, chAgentsDraw, chAgentsTick},
 }};
@@ -381,6 +393,27 @@ void tickActive(uint32_t now) {
 }  // namespace
 
 // Accessors used by the attention channel (glimmer's main.cpp provides these there).
+// Accessors used by the Info channel (usage fetch timing, approximated from the data's age)
+auto mainEnabledCount() -> int { return g_activeCount; }
+auto mainTotalCount() -> int { return static_cast<int>(kChannels.size()); }
+auto mainLastRefreshMs() -> uint32_t {
+    const time_t newest = UsageManager::claude().lastOk > UsageManager::codex().lastOk ? UsageManager::claude().lastOk
+                                                                                     : UsageManager::codex().lastOk;
+    if (newest <= 0 || !timeSynced()) {
+        return millis();
+    }
+
+    const auto ageSec = static_cast<uint32_t>(time(nullptr) - newest);
+    const uint32_t ageMs = ageSec * MS_PER_SECOND;
+
+    return millis() - ageMs;
+}
+auto mainNextFetchInMs() -> uint32_t {
+    const uint32_t every = static_cast<uint32_t>(g_settings.refreshMin) * SECONDS_PER_MINUTE * MS_PER_SECOND;
+    const uint32_t age = millis() - mainLastRefreshMs();
+
+    return age < every ? every - age : 0;
+}
 auto mainNightFace() -> bool { return false; }  // night face: not implemented yet
 auto mainPinApprovals() -> bool { return g_settings.pinApprovals; }
 auto mainAgentNightShow() -> bool { return g_settings.agentNightShow; }
@@ -452,7 +485,9 @@ void ChannelManager::update() {
     static uint32_t lastSyncCheck = 0;
     static uint32_t seenUsageRevision = 0;
     static uint32_t seenPresenceRevision = 0;
-    if (Presence::revision() != seenPresenceRevision) {
+    // A presence change only sets the idle screen: while a card holds the screen it waits (attentionStep repaints
+    // from the new state when the card is gone).
+    if (Presence::revision() != seenPresenceRevision && !g_wasAttention) {
         seenPresenceRevision = Presence::revision();
         g_manualGif = "";
         g_gifBlockedUntil = 0;

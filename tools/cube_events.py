@@ -9,7 +9,8 @@
     cube_events.py get ID
     cube_events.py add ID TITLE --at 2026-11-09T09:00:00+00:00 [--body ...] [--icon meeting] [--kind warning] [--ttl 600]
     cube_events.py add ID TITLE --repeat weekly --time 09:30 --days mon,wed
-    cube_events.py meeting ID TITLE START_ISO [--lead 15 --lead 5] [--body ...]
+    cube_events.py add ID --mode busy|away|relaxing|normal --at ... [--text ...] [--gif ...]   (changes the idle screen)
+    cube_events.py meeting ID TITLE START_ISO [--lead 15 --lead 5] [--body ...] [--busy MINUTES]
     cube_events.py delete ID          |  clear
     cube_events.py replace FILE.json  (a JSON list of events; sent in parts, swapped in atomically)
     cube_events.py fire ID            (fire an event now, to see how it looks)
@@ -61,12 +62,18 @@ def parse_instant(text):
 
 
 def build_event(args):
-    event = {"id": args.id, "title": args.title}
-    for field in ("body", "value", "icon", "kind", "display"):
-        if getattr(args, field, None):
-            event[field] = getattr(args, field)
-    if args.ttl is not None:
-        event["ttl_s"] = args.ttl
+    if getattr(args, "mode", None):
+        event = {"id": args.id, "mode": args.mode}
+        for field in ("text", "gif"):
+            if getattr(args, field, None):
+                event[field] = getattr(args, field)
+    else:
+        event = {"id": args.id, "title": args.title}
+        for field in ("body", "value", "icon", "kind", "display"):
+            if getattr(args, field, None):
+                event[field] = getattr(args, field)
+        if args.ttl is not None:
+            event["ttl_s"] = args.ttl
     if args.at:
         event["at"] = args.at
     else:
@@ -95,6 +102,11 @@ def meeting_events(args):
     for event in events:
         if args.body:
             event["body"] = args.body
+    if args.busy:
+        # the idle screen says "busy" for the length of the meeting, then goes back to normal
+        events.append({"id": f"{args.id}-busy", "mode": "busy", "text": args.title[:27], "at": start.isoformat()})
+        events.append({"id": f"{args.id}-free", "mode": "normal",
+                       "at": (start + timedelta(minutes=args.busy)).isoformat()})
     return events
 
 
@@ -108,7 +120,9 @@ def main():
     sub.add_parser("clear")
     p = sub.add_parser("fire"); p.add_argument("id")
     p = sub.add_parser("replace"); p.add_argument("file")
-    p = sub.add_parser("add"); p.add_argument("id"); p.add_argument("title")
+    p = sub.add_parser("add"); p.add_argument("id"); p.add_argument("title", nargs="?", default="")
+    p.add_argument("--mode", choices=["normal", "busy", "away", "relaxing"], help="change the idle screen instead of showing a card")
+    p.add_argument("--text"); p.add_argument("--gif")
     p.add_argument("--at"); p.add_argument("--repeat", choices=["daily", "weekly", "monthly"]); p.add_argument("--time")
     p.add_argument("--days"); p.add_argument("--day", type=int)
     for field in ("body", "value", "icon", "kind", "display"):
@@ -116,6 +130,7 @@ def main():
     p.add_argument("--ttl", type=int)
     p = sub.add_parser("meeting"); p.add_argument("id"); p.add_argument("title"); p.add_argument("start")
     p.add_argument("--lead", type=int, action="append", default=[15]); p.add_argument("--body")
+    p.add_argument("--busy", type=int, metavar="MINUTES", help="also set the screen to busy at the start, back to normal after MINUTES")
     args = parser.parse_args()
 
     if args.command == "status":
@@ -133,6 +148,8 @@ def main():
     elif args.command == "add":
         if bool(args.at) == bool(args.repeat):
             sys.exit("give either --at, or --repeat with --time")
+        if not args.mode and not args.title:
+            sys.exit("a card needs a title (or use --mode to change the idle screen)")
         show(call("POST", "/api/v1/events", build_event(args)))
     elif args.command == "meeting":
         events = meeting_events(args)

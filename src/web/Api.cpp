@@ -176,7 +176,7 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {post} /ui version=v1 group=Display summary="Update display settings (partial update)"
     // requiresAuth=true requestBody=application/json
-    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean
+    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,show_trend:boolean,show_ai:boolean,show_info:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean
     // example={"mode":"cycle","gif":"arch-i-use-arch-btw.gif","interval_s":15,"user_name":"Patrick","timezone":"GMT0BST,M3.5.0/1,M10.5.0"}
     // responses=200:application/json,400:application/json,401:application/json
     webserver->route("/api/v1/ui", HTTP_POST, handleUiSet);
@@ -1436,6 +1436,9 @@ void handleUiGet(Webserver* webserver) {
     doc["agent_done_cards"] = settings.agentDoneCards;
     doc["show_claude"] = settings.showClaude;
     doc["show_codex"] = settings.showCodex;
+    doc["show_trend"] = settings.showTrend;
+    doc["show_ai"] = settings.showAiDash;
+    doc["show_info"] = settings.showInfo;
     doc["refresh_min"] = settings.refreshMin;
     doc["claude_weekly_hero"] = settings.claudeWeeklyHero;
     doc["codex_weekly_hero"] = settings.codexWeeklyHero;
@@ -1486,6 +1489,45 @@ static auto applyUiSchedule(JsonDocument& body, UiSettings& next) -> const char*
             return "interval_s must be between 3 and 3600";
         }
         next.channelSec = static_cast<uint16_t>(interval);
+    }
+
+    return nullptr;
+}
+
+/** @brief The on/off switches of the usage pages and the usage options. */
+static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const char* {
+    struct Flag {
+        const char* key;
+        bool UiSettings::*field;
+    };
+    static const std::array<Flag, 7> FLAGS = {{{"show_claude", &UiSettings::showClaude},
+                                               {"show_codex", &UiSettings::showCodex},
+                                               {"show_trend", &UiSettings::showTrend},
+                                               {"show_ai", &UiSettings::showAiDash},
+                                               {"show_info", &UiSettings::showInfo},
+                                               {"claude_weekly_hero", &UiSettings::claudeWeeklyHero},
+                                               {"codex_weekly_hero", &UiSettings::codexWeeklyHero}}};
+    for (const Flag& flag : FLAGS) {
+        if (!body[flag.key].isNull()) {
+            if (!body[flag.key].is<bool>()) {
+                return "show_*, *_weekly_hero and tls_verify must be true or false";
+            }
+            next.*(flag.field) = body[flag.key].as<bool>();
+        }
+    }
+    if (!body["tls_verify"].isNull()) {
+        if (!body["tls_verify"].is<bool>()) {
+            return "show_*, *_weekly_hero and tls_verify must be true or false";
+        }
+        next.tlsVerify = body["tls_verify"].as<bool>();
+    }
+    if (!body["refresh_min"].isNull()) {
+        const int minutes = body["refresh_min"] | 0;
+        constexpr int MAX_REFRESH_MIN = 60;
+        if (minutes < 1 || minutes > MAX_REFRESH_MIN) {
+            return "refresh_min must be between 1 and 60";
+        }
+        next.refreshMin = static_cast<uint16_t>(minutes);
     }
 
     return nullptr;
@@ -1545,6 +1587,9 @@ static auto applyUiBody(JsonDocument& body, UiSettings& next, std::string& nextT
         return error;
     }
     if (const char* error = applyUiFlags(body, next, nextTz); error != nullptr) {
+        return error;
+    }
+    if (const char* error = applyUsageFlags(body, next); error != nullptr) {
         return error;
     }
 

@@ -138,6 +138,9 @@ uint16_t Theme::channelColor(const char* name) {
     if (!strcmp(name, "Claude")) return CORAL;
     if (!strcmp(name, "Codex")) return LILAC;
     if (!strcmp(name, "Clock")) return AMBER;
+    if (!strcmp(name, "AiDash")) return CORAL;
+    if (!strcmp(name, "Trend")) return LILAC;
+    if (!strcmp(name, "Info")) return MINT;
     if (!strcmp(name, "Home")) return AMBER;
     if (!strcmp(name, "Gif")) return SKY;
     if (!strcmp(name, "Agents")) return LILAC;

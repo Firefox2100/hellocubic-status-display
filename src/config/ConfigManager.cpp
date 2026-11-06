@@ -102,6 +102,9 @@ auto ConfigManager::load() -> bool {
         this->ui.agentDoneCards = readBool(uiCfg["agent_done_cards"], ui.agentDoneCards);
         this->ui.showClaude = readBool(uiCfg["show_claude"], ui.showClaude);
         this->ui.showCodex = readBool(uiCfg["show_codex"], ui.showCodex);
+        this->ui.showTrend = readBool(uiCfg["show_trend"], ui.showTrend);
+        this->ui.showAiDash = readBool(uiCfg["show_ai"], ui.showAiDash);
+        this->ui.showInfo = readBool(uiCfg["show_info"], ui.showInfo);
         this->ui.refreshMin = readUint16(uiCfg["refresh_min"], ui.refreshMin);
         this->ui.claudeWeeklyHero = readBool(uiCfg["claude_weekly_hero"], ui.claudeWeeklyHero);
         this->ui.codexWeeklyHero = readBool(uiCfg["codex_weekly_hero"], ui.codexWeeklyHero);
@@ -259,6 +262,9 @@ auto ConfigManager::save() -> bool {
     doc["ui"]["agent_night_show"] = ui.agentNightShow;
     doc["ui"]["agent_done_cards"] = ui.agentDoneCards;
     doc["ui"]["show_claude"] = ui.showClaude;
+    doc["ui"]["show_trend"] = ui.showTrend;
+    doc["ui"]["show_ai"] = ui.showAiDash;
+    doc["ui"]["show_info"] = ui.showInfo;
     doc["ui"]["show_codex"] = ui.showCodex;
     doc["ui"]["refresh_min"] = ui.refreshMin;
     doc["ui"]["claude_weekly_hero"] = ui.claudeWeeklyHero;
