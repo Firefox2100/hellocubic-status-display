@@ -14,6 +14,7 @@
 #include "theme.h"
 #include "layout.h"
 #include "clockfmt.h"
+#include "weather.h"
 #include <time.h>
 
 static int  s_lastHH = -1, s_lastMM = -1;
@@ -122,7 +123,7 @@ static void paintDayStrip(int hour) {
 
 bool chClockEnabled(const ChannelCtx& ctx) {
     return ctx.settings && (ctx.settings->idleMode == "clock" || ctx.settings->idleMode == "cycle")
-        && time(nullptr) > 1000000000L;
+        && time(nullptr) > 1000000000L && !Weather::homeActive(*ctx.settings);   // Home replaces it while weather works
 }
 
 void chClockDraw(const ChannelCtx& ctx) {

@@ -32,6 +32,13 @@ struct UiSettings {
     uint16_t refreshMin = 5;           ///< minutes between usage fetches
     bool claudeWeeklyHero = false;     ///< weekly window as the big number instead of the 5-hour one
     bool codexWeeklyHero = false;
+    // Weather (Open-Meteo, plain HTTP, no key). While it works the Home page replaces the plain clock.
+    bool showWeather = true;
+    float weatherLat = 51.5074f;       ///< default: London
+    float weatherLon = -0.1278f;
+    std::string weatherName = "London"; ///< label only (shown by the API and the web UI)
+    bool useFahrenheit = false;
+
     bool showStatus = false;           ///< vendor status badges (not ported; kept for glimmer's screens)
     bool tlsVerify = true;             ///< validate server certificates (about 3 s per connection on this chip)
 

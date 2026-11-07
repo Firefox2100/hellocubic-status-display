@@ -20,8 +20,12 @@
 #include "display/DisplayManager.h"
 #include "system/Diagnostics.h"
 #include "ui/Presence.h"
+#include "weather.h"
 
 // Channels implemented in src/glimmer/ch_*.cpp
+extern auto chHomeEnabled(const ChannelCtx& ctx) -> bool;
+extern void chHomeDraw(const ChannelCtx& ctx);
+extern void chHomeTick(const ChannelCtx& ctx);
 extern auto chClockEnabled(const ChannelCtx& ctx) -> bool;
 extern void chClockDraw(const ChannelCtx& ctx);
 extern void chClockTick(const ChannelCtx& ctx);
@@ -70,7 +74,7 @@ constexpr long REASONABLE_EPOCH = 1000000000L;
 constexpr uint32_t GIF_DECODER_BYTES = sizeof(AnimatedGIF);
 constexpr uint32_t GIF_HEAP_HEADROOM = 4096;
 constexpr int MAX_REDRAW_ATTEMPTS = 4;
-constexpr size_t MAX_CHANNELS = 12;
+constexpr size_t MAX_CHANNELS = 13;
 
 UiSettings g_settings;
 bool g_apMode = false;
@@ -176,10 +180,11 @@ void chGifTick([[maybe_unused]] const ChannelCtx& ctx) {
 
 // ── Channel table ───────────────────────────────────────────────────────────
 
-const std::array<Channel, 11> kChannels = {{
+const std::array<Channel, 12> kChannels = {{
     {"Busy", presenceEnabledBusy, presenceBusyDraw, nullptr},
     {"Away", presenceEnabledAway, presenceAwayDraw, nullptr},
     {"Attention", chAttentionEnabled, chAttentionDraw, chAttentionTick},
+    {"Home", chHomeEnabled, chHomeDraw, chHomeTick},
     {"Clock", chClockEnabled, chClockDraw, chClockTick},
     {"Claude", chClaudeEnabled, chClaudeDraw, chClaudeTick},
     {"Codex", chCodexEnabled, chCodexDraw, chCodexTick},
@@ -208,6 +213,9 @@ auto isGifActive() -> bool {
     return name != nullptr && sameName(name, "Gif");
 }
 
+// Home and Clock are the same slot: Home while the weather works, the plain clock otherwise.
+auto isClockFace(const char* name) -> bool { return sameName(name, "Clock") || sameName(name, "Home"); }
+
 void recomputeActive() {
     // Keep showing the same channel across a recompute when it is still enabled.
     const char* cur = currentName();
@@ -224,7 +232,7 @@ void recomputeActive() {
                 allowed = true;
             } else if (presence == Presence::Mode::Relaxing) {
                 // the GIF, or the clock when the GIF cannot run (low heap, missing file)
-                allowed = sameName(chName, "Gif") || (sameName(chName, "Clock") && !gifUsable);
+                allowed = sameName(chName, "Gif") || ((sameName(chName, "Clock") || sameName(chName, "Home")) && !gifUsable);
             } else {
                 allowed = sameName(chName, presence == Presence::Mode::Busy ? "Busy" : "Away");
             }
@@ -237,7 +245,7 @@ void recomputeActive() {
     g_activePtr = 0;
     for (int i = 0; cur != nullptr && i < g_activeCount; i++) {
         const char* name = kChannels.at(static_cast<size_t>(g_activeIdx.at(static_cast<size_t>(i)))).name;
-        if (sameName(name, cur)) {
+        if (sameName(name, cur) || (isClockFace(name) && isClockFace(cur))) {
             g_activePtr = i;
             break;
         }
@@ -491,6 +499,13 @@ void ChannelManager::update() {
         seenPresenceRevision = Presence::revision();
         g_manualGif = "";
         g_gifBlockedUntil = 0;
+        refreshScreen(true);
+    }
+    // Home replaces the clock while the weather is fresh, and the clock comes back when it is not
+    static bool seenHome = false;
+    const bool homeNow = Weather::homeActive(g_settings);
+    if (homeNow != seenHome && !g_wasAttention) {
+        seenHome = homeNow;
         refreshScreen(true);
     }
     if (now - lastSyncCheck >= EXPIRE_MS) {

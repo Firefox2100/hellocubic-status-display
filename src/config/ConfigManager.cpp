@@ -109,6 +109,11 @@ auto ConfigManager::load() -> bool {
         this->ui.claudeWeeklyHero = readBool(uiCfg["claude_weekly_hero"], ui.claudeWeeklyHero);
         this->ui.codexWeeklyHero = readBool(uiCfg["codex_weekly_hero"], ui.codexWeeklyHero);
         this->ui.tlsVerify = readBool(uiCfg["tls_verify"], ui.tlsVerify);
+        this->ui.showWeather = readBool(uiCfg["show_weather"], ui.showWeather);
+        this->ui.useFahrenheit = readBool(uiCfg["fahrenheit"], ui.useFahrenheit);
+        this->ui.weatherLat = uiCfg["weather_lat"] | ui.weatherLat;
+        this->ui.weatherLon = uiCfg["weather_lon"] | ui.weatherLon;
+        this->ui.weatherName = readString(uiCfg["weather_name"], ui.weatherName);
     } else if (!doc["idle"].isNull()) {
         // Phase 2 layout: carry the old settings over (the cycle list is gone, mode "cycle" now alternates)
         JsonVariantConst oldCfg = doc["idle"];
@@ -270,6 +275,11 @@ auto ConfigManager::save() -> bool {
     doc["ui"]["claude_weekly_hero"] = ui.claudeWeeklyHero;
     doc["ui"]["codex_weekly_hero"] = ui.codexWeeklyHero;
     doc["ui"]["tls_verify"] = ui.tlsVerify;
+    doc["ui"]["show_weather"] = ui.showWeather;
+    doc["ui"]["fahrenheit"] = ui.useFahrenheit;
+    doc["ui"]["weather_lat"] = ui.weatherLat;
+    doc["ui"]["weather_lon"] = ui.weatherLon;
+    doc["ui"]["weather_name"] = ui.weatherName;
 
     if (serializeJson(doc, file) == 0) {
         Logger::error("Failed to write config file", "ConfigManager");

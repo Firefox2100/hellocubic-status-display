@@ -63,6 +63,30 @@
           <label><input type="checkbox" x-model="ui.claude_weekly_hero" /> Claude: weekly figure first</label>
           <label><input type="checkbox" x-model="ui.codex_weekly_hero" /> Codex: weekly figure first</label>
         </fieldset>
+        <h3>Weather</h3>
+        <p>
+          While the weather can be fetched the Home page (clock, weather, usage) replaces the plain clock;
+          otherwise the plain clock is shown. Data comes from Open-Meteo, sending only the coordinates.
+        </p>
+        <label><input type="checkbox" x-model="ui.show_weather" /> Show weather (Home page)</label>
+        <label>Find a place
+          <input type="search" placeholder="e.g. Leicester" x-model="query" @keydown.enter.prevent="search()" />
+        </label>
+        <button type="button" class="secondary" @click="search()">Search</button>
+        <template x-for="r in results" :key="r.id">
+          <div><a href="#" @click.prevent="pick(r)" x-text="r.label"></a></div>
+        </template>
+        <label>Place name (label)
+          <input type="text" maxlength="24" x-model="ui.weather_name" />
+        </label>
+        <div class="grid">
+          <label>Latitude<input type="number" step="0.0001" min="-90" max="90" x-model.number="ui.weather_lat" /></label>
+          <label>Longitude<input type="number" step="0.0001" min="-180" max="180" x-model.number="ui.weather_lon" /></label>
+        </div>
+        <label><input type="checkbox" x-model="ui.fahrenheit" /> Fahrenheit</label>
+        <button type="button" class="secondary" @click="refreshWeather()">Fetch now</button>
+        <pre x-text="weatherInfo"></pre>
+
         <label>Refresh usage every (minutes, 1-60)
           <input type="number" min="1" max="60" x-model.number="ui.refresh_min" />
         </label>

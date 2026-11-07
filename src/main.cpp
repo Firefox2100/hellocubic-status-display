@@ -37,6 +37,7 @@
 #include "ntp/NTPClient.h"
 #include "boot/RescueMode.h"
 #include "system/Diagnostics.h"
+#include "weather.h"
 #include <array>
 
 ConfigManager configManager;
@@ -165,6 +166,7 @@ void setup() {
 
     EventScheduler::begin();  // scheduled events: needs the filesystem, fires once the clock is set
     Presence::begin();        // saved busy/away/relaxing state
+    Weather::begin();       // last good weather from flash
     UsageManager::begin();  // fills the credential flags that the channels read
     ChannelManager::begin(wifiManager->isApMode());
     ChannelManager::applySettings(configManager.ui);
@@ -201,6 +203,7 @@ void loop() {
     }
     EventScheduler::update();
     ChannelManager::update();
+    Weather::update();       // plain-HTTP fetch, about a second when due
     UsageManager::update();  // blocks for a few seconds when a fetch is due
 
     static unsigned long last_free_heap_log = 0;

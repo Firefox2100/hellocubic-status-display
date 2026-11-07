@@ -665,6 +665,16 @@ paths:
                   type: "boolean"
                 tls_verify:
                   type: "boolean"
+                show_weather:
+                  type: "boolean"
+                fahrenheit:
+                  type: "boolean"
+                weather_lat:
+                  type: "number"
+                weather_lon:
+                  type: "number"
+                weather_name:
+                  type: "string"
               example:
                 mode: "cycle"
                 gif: "arch-i-use-arch-btw.gif"
@@ -1464,7 +1474,54 @@ components:
       scheme: "bearer"
       bearerFormat: "Token"
       description: "Bearer token authentication. Include the token in the Authorization header as: Bearer <token>"
+  /api/v1/weather:
+    get:
+      summary: "Fetched weather, fetch status and what the Home page shows"
+      operationId: "op_v1_get_api_v1_weather"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Weather"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Fetched weather, fetch status and what the Home page shows. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/weather/refresh:
+    post:
+      summary: "Fetch the weather again soon"
+      operationId: "op_v1_post_api_v1_weather_refresh"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Weather"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Fetch the weather again soon. This endpoint requires a valid bearer token in the Authorization header."
+
 tags:
+  - name: "Weather"
+    description: "API Weather endpoints"
   - name: "Presence"
     description: "API Presence endpoints"
   - name: "Events"

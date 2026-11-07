@@ -176,7 +176,7 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {post} /ui version=v1 group=Display summary="Update display settings (partial update)"
     // requiresAuth=true requestBody=application/json
-    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,show_trend:boolean,show_ai:boolean,show_info:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean
+    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,show_trend:boolean,show_ai:boolean,show_info:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean,show_weather:boolean,fahrenheit:boolean,weather_lat:number,weather_lon:number,weather_name:string
     // example={"mode":"cycle","gif":"arch-i-use-arch-btw.gif","interval_s":15,"user_name":"Patrick","timezone":"GMT0BST,M3.5.0/1,M10.5.0"}
     // responses=200:application/json,400:application/json,401:application/json
     webserver->route("/api/v1/ui", HTTP_POST, handleUiSet);
@@ -217,6 +217,7 @@ void registerApiEndpoints(Webserver* webserver) {
     registerPushEndpoints(webserver);
     registerEventEndpoints(webserver);
     registerPresenceEndpoints(webserver);
+    registerWeatherEndpoints(webserver);
 
     // @openapi {get} /token/check version=v1 group=Authentication summary="Check bearer token validity"
     // requiresAuth=true responses=200:application/json,401:application/json
@@ -1443,6 +1444,11 @@ void handleUiGet(Webserver* webserver) {
     doc["claude_weekly_hero"] = settings.claudeWeeklyHero;
     doc["codex_weekly_hero"] = settings.codexWeeklyHero;
     doc["tls_verify"] = settings.tlsVerify;
+    doc["show_weather"] = settings.showWeather;
+    doc["fahrenheit"] = settings.useFahrenheit;
+    doc["weather_lat"] = settings.weatherLat;
+    doc["weather_lon"] = settings.weatherLon;
+    doc["weather_name"] = settings.weatherName.c_str();
     doc["timezone"] = configManager.timezone.c_str();
     doc["active_channel"] = ChannelManager::activeName();
 
@@ -1494,32 +1500,72 @@ static auto applyUiSchedule(JsonDocument& body, UiSettings& next) -> const char*
     return nullptr;
 }
 
+/** @brief The weather location: weather_lat (-90..90), weather_lon (-180..180), weather_name (label, 24 characters). */
+static auto applyWeatherPlace(JsonDocument& body, UiSettings& next) -> const char* {
+    constexpr float MAX_LAT = 90.0F;
+    constexpr float MAX_LON = 180.0F;
+    constexpr size_t MAX_PLACE_NAME = 24;
+    if (!body["weather_lat"].isNull()) {
+        if (!body["weather_lat"].is<float>()) {
+            return "weather_lat must be a number between -90 and 90";
+        }
+        const float lat = body["weather_lat"].as<float>();
+        if (lat < -MAX_LAT || lat > MAX_LAT) {
+            return "weather_lat must be a number between -90 and 90";
+        }
+        next.weatherLat = lat;
+    }
+    if (!body["weather_lon"].isNull()) {
+        if (!body["weather_lon"].is<float>()) {
+            return "weather_lon must be a number between -180 and 180";
+        }
+        const float lon = body["weather_lon"].as<float>();
+        if (lon < -MAX_LON || lon > MAX_LON) {
+            return "weather_lon must be a number between -180 and 180";
+        }
+        next.weatherLon = lon;
+    }
+    if (!body["weather_name"].isNull()) {
+        next.weatherName = body["weather_name"] | "";
+        if (!validUserName(next.weatherName) || next.weatherName.size() > MAX_PLACE_NAME) {
+            return "weather_name must be printable ASCII, at most 24 characters";
+        }
+    }
+
+    return nullptr;
+}
+
 /** @brief The on/off switches of the usage pages and the usage options. */
 static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const char* {
     struct Flag {
         const char* key;
         bool UiSettings::*field;
     };
-    static const std::array<Flag, 7> FLAGS = {{{"show_claude", &UiSettings::showClaude},
+    static const std::array<Flag, 9> FLAGS = {{{"show_claude", &UiSettings::showClaude},
                                                {"show_codex", &UiSettings::showCodex},
                                                {"show_trend", &UiSettings::showTrend},
                                                {"show_ai", &UiSettings::showAiDash},
                                                {"show_info", &UiSettings::showInfo},
                                                {"claude_weekly_hero", &UiSettings::claudeWeeklyHero},
-                                               {"codex_weekly_hero", &UiSettings::codexWeeklyHero}}};
+                                               {"codex_weekly_hero", &UiSettings::codexWeeklyHero},
+                                               {"show_weather", &UiSettings::showWeather},
+                                               {"fahrenheit", &UiSettings::useFahrenheit}}};
     for (const Flag& flag : FLAGS) {
         if (!body[flag.key].isNull()) {
             if (!body[flag.key].is<bool>()) {
-                return "show_*, *_weekly_hero and tls_verify must be true or false";
+                return "show_*, fahrenheit, *_weekly_hero and tls_verify must be true or false";
             }
             next.*(flag.field) = body[flag.key].as<bool>();
         }
     }
     if (!body["tls_verify"].isNull()) {
         if (!body["tls_verify"].is<bool>()) {
-            return "show_*, *_weekly_hero and tls_verify must be true or false";
+            return "show_*, fahrenheit, *_weekly_hero and tls_verify must be true or false";
         }
         next.tlsVerify = body["tls_verify"].as<bool>();
+    }
+    if (const char* error = applyWeatherPlace(body, next); error != nullptr) {
+        return error;
     }
     if (!body["refresh_min"].isNull()) {
         const int minutes = body["refresh_min"] | 0;
