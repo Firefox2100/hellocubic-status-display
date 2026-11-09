@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Channel scheduling modelled on glimmer's main loop (https://github.com/Avinava/glimmer, MIT, see THIRD_PARTY.md).
 #include "ui/ChannelManager.h"
+#include "ui/AgentTracker.h"
 
 #include <AnimatedGIF.h>
 #include <LittleFS.h>
@@ -348,6 +349,7 @@ void attentionStep(uint32_t now) {
     if (now - lastExpire >= EXPIRE_MS) {
         lastExpire = now;
         AttentionQueue::expire();
+        AgentTracker::expire();
     }
 
     // A new interrupt card (or one that became more urgent) takes the screen right away; when nothing holds the

@@ -270,11 +270,16 @@ enum HookAction : uint8_t { HOOK_NONE, HOOK_UPSERT, HOOK_CLEAR };
 // the same grace Claude Code gives its own idle_prompt notification.
 constexpr uint32_t kCodexIdleS = 60;
 
-// One card per agent session: "<agent>:<first 8 of session>".
+// How long a DONE card stays listed (it is also cleared by that session's next prompt).
+constexpr uint32_t kDoneCardS = 180;
+
+// One card per agent session: "<agent>:<8 hex of a hash of the session id>".
 inline void sessionId(Agent a, const char* session, char* out, size_t n) {
-    char s[9] = "";
-    copyStr(s, sizeof(s), session && *session ? session : "default");
-    snprintf(out, n, "%s:%s", agentName(a), s);
+    // A hash of the WHOLE id: time-ordered ids (Codex) share their first characters across nearby sessions.
+    const char* text = session && *session ? session : "default";
+    uint32_t hash = 2166136261U;
+    for (const char* p = text; *p; p++) hash = (hash ^ (uint8_t)*p) * 16777619U;
+    snprintf(out, n, "%s:%08x", agentName(a), (unsigned)hash);
 }
 
 inline void basename(const char* path, char* out, size_t n) {
@@ -338,10 +343,9 @@ inline HookAction fromHook(Agent agent, const HookEvent& e, bool doneCards,
             snprintf(d.id, sizeof(d.id), "%.18s:done", out.id);
             d.kind = K_SUCCESS;
             copyStr(d.title, sizeof(d.title), "DONE");
-            copyStr(d.body, sizeof(d.body), "Codex finished");
-            d.display = SHOW_INTERRUPT;
-            d.expires = now + 20;
-            d.interruptUntil = now + 20;
+            snprintf(d.body, sizeof(d.body), "%s finished", d.project[0] ? d.project : "Codex");
+            d.display = SHOW_QUEUE;      // listed, but never takes the screen: you may be in a meeting
+            d.expires = now + kDoneCardS;
             d.used = true;
         }
         out.kind = K_INPUT;
@@ -356,10 +360,10 @@ inline HookAction fromHook(Agent agent, const HookEvent& e, bool doneCards,
     if (finished && doneCards) {
         out.kind = K_SUCCESS;
         copyStr(out.title, sizeof(out.title), "DONE");
-        snprintf(out.body, sizeof(out.body), "%s finished", agent == AGENT_CODEX ? "Codex" : "Claude");
-        out.display = SHOW_INTERRUPT;
-        out.expires = now + 20;
-        out.interruptUntil = now + 20;
+        snprintf(out.body, sizeof(out.body), "%s finished",
+                 out.project[0] ? out.project : (agent == AGENT_CODEX ? "Codex" : "Claude"));
+        out.display = SHOW_QUEUE;        // listed, but never takes the screen: you may be in a meeting
+        out.expires = now + kDoneCardS;
         return HOOK_UPSERT;      // replaces the session's approval/input card
     }
 

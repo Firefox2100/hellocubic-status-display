@@ -21,6 +21,7 @@
 #include "layout.h"
 #include "attention.h"
 #include "timeutil.h"
+#include "ui/AgentTracker.h"
 #include "ui/Icons.h"
 
 using namespace Attention;
@@ -316,8 +317,72 @@ void chAttentionTick(const ChannelCtx&) {
 static uint32_t s_listRev = 0;
 static uint32_t s_listMin = 0xFFFFFFFF;
 
+// The Agents list: cards first (a waiting agent already has its card), then the sessions the hooks are tracking
+// that have no card: working, then done. Max 3 rows; more become "+ N more".
+struct AgentRow {
+    const Item* card = nullptr;
+    const AgentSessions::Session* session = nullptr;
+};
+
+static int sessionCount() {
+    int w, q, d;
+    AgentSessions::counts(AgentTracker::table(), w, q, d);
+    return w + q + d;
+}
+
+static bool hasCardFor(const AgentSessions::Session& sess, const Queue& q, uint32_t now) {
+    char id[24];
+    snprintf(id, sizeof(id), "%s:%s", agentName(sess.agent), sess.id);
+    for (const Item& it : q.items) {
+        if (visible(it, now) && !strcmp(it.id, id)) return true;
+    }
+    return false;
+}
+
+static int buildRows(AgentRow* rows, int cap) {
+    const Queue& q = AttentionQueue::get();
+    const uint32_t now = AttentionQueue::now();
+    int ord[kMax];
+    const int n = ordered(q, ord, now);
+    int count = 0;
+    for (int i = 0; i < n && count < cap; i++) rows[count++].card = &q.items[ord[i]];
+    static const AgentSessions::State order[] = {AgentSessions::S_WAITING, AgentSessions::S_WORKING, AgentSessions::S_DONE};
+    for (AgentSessions::State want : order) {
+        for (const AgentSessions::Session& sess : AgentTracker::table().s) {
+            if (sess.state != want || count >= cap || hasCardFor(sess, q, now)) continue;
+            rows[count].card = nullptr;
+            rows[count++].session = &sess;
+        }
+    }
+    return count;
+}
+
+static void sessionRow(const AgentSessions::Session& sess, int y, uint32_t now) {
+    const uint16_t color = sess.state == AgentSessions::S_WORKING ? Theme::SKY
+                         : sess.state == AgentSessions::S_WAITING ? Theme::AMBER : Theme::MINT;
+    tft.fillRect(20, y + 4, 6, 6, color);
+    const char* label = sess.state == AgentSessions::S_WORKING ? "Working" : sess.state == AgentSessions::S_WAITING ? "Needs you" : "Done";
+    char line[40];
+    snprintf_P(line, sizeof(line), PSTR("%s"), label);
+    Display::useFont("DMMono-11");
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(Theme::INK, Theme::BG);
+    tft.drawString(line, 36, y);
+
+    // Working: how long this run has lasted. Done: how long ago it finished.
+    const long secs = (long)(now - (sess.state == AgentSessions::S_DONE ? sess.changedS : sess.startedS));
+    char age[8]; TimeUtil::shortDuration(secs, age, sizeof(age));
+    for (char* p = age; *p; p++) if (*p >= 'A' && *p <= 'Z') *p += 32;
+    char meta[48];
+    if (sess.project[0]) snprintf_P(meta, sizeof(meta), PSTR("%s \xC2\xB7 %s \xC2\xB7 %s"), agentName(sess.agent), sess.project, age);
+    else                 snprintf_P(meta, sizeof(meta), PSTR("%s \xC2\xB7 %s"), agentName(sess.agent), age);
+    fitLine(meta, 190);
+    tft.setTextColor(Theme::MUTED, Theme::BG);
+    tft.drawString(meta, 36, y + 15);
+}
+
 bool chAgentsEnabled(const ChannelCtx&) {
-    return !mainNightFace() && countVisible(AttentionQueue::get(), AttentionQueue::now()) > 0;
+    return !mainNightFace() && (countVisible(AttentionQueue::get(), AttentionQueue::now()) > 0 || sessionCount() > 0);
 }
 
 static void listRow(const Item& it, int y, uint32_t now) {
@@ -356,16 +421,19 @@ static void listRow(const Item& it, int y, uint32_t now) {
     tft.drawString(meta, 36, y + 15);
 }
 
+static uint32_t s_sessRev = 0;
+
 static void paintList() {
-    const Queue& q = AttentionQueue::get();
     uint32_t now = AttentionQueue::now();
-    int ord[kMax], n = ordered(q, ord, now);
+    AgentRow rows[kMax + AgentSessions::kMax];
+    const int n = buildRows(rows, kMax + AgentSessions::kMax);
     tft.fillRect(0, 0, SCREEN_W, Layout::CONTENT_BOTTOM, Theme::BG);
     centerText("Silkscreen-12", "AGENTS", 10, Theme::MUTED);
     int shown = n > 3 ? 2 : n;
     for (int i = 0; i < shown; i++) {
         int y = 40 + i * 60;
-        listRow(q.items[ord[i]], y, now);
+        if (rows[i].card) listRow(*rows[i].card, y, now);
+        else              sessionRow(*rows[i].session, y, now);
         if (i < n - 1) tft.drawFastHLine(20, y + 44, 200, Theme::LINE);
     }
     if (n > shown) {
@@ -373,6 +441,7 @@ static void paintList() {
         centerText("DMMono-11", more, 40 + shown * 60, Theme::MUTED);
     }
     s_listRev = AttentionQueue::revision();
+    s_sessRev = AgentTracker::revision();
     s_listMin = now / 60;
 }
 
@@ -382,5 +451,5 @@ void chAgentsDraw(const ChannelCtx&) {
 }
 
 void chAgentsTick(const ChannelCtx&) {
-    if (AttentionQueue::revision() != s_listRev || AttentionQueue::now() / 60 != s_listMin) paintList();
+    if (AttentionQueue::revision() != s_listRev || AgentTracker::revision() != s_sessRev || AttentionQueue::now() / 60 != s_listMin) paintList();
 }

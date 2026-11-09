@@ -21,7 +21,7 @@ struct UiSettings {
     bool pinApprovals = true;          ///< approvals/questions hold the screen until answered
     uint16_t approvalTtlMin = 30;      ///< safety expiry when nothing clears an approval
     bool agentNightShow = false;       ///< reserved for the night face (not implemented yet)
-    bool agentDoneCards = false;       ///< short "DONE" card when an agent finishes (hook events)
+    bool agentDoneCards = true;        ///< short "DONE" card when an agent finishes (hook events)
 
     // Claude / Codex usage screens (credentials are in CredentialStore, never here)
     bool showClaude = true;

@@ -11,10 +11,12 @@
 
 #include "attention.h"
 #include "attention_json.h"
+#include "ui/AgentTracker.h"
 #include "web/Api.h"
 #include "web/Webserver.h"
 
 extern auto mainApprovalTtlS() -> uint32_t;
+extern auto mainAgentDoneCards() -> bool;
 
 namespace {
 constexpr size_t MAX_PUSH_BODY = 2048;  // a card is tiny; anything bigger is a mistake (or a raw hook event)
@@ -111,6 +113,89 @@ void handlePushClear(Webserver* webserver) {
     }
     sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 }
+
+/**
+ * @brief Agent hook events from tools/agents/hook.sh (Claude Code, Codex). Always answers 200 with the action taken,
+ *        and never fails the agent: a bad or oversized event is simply ignored.
+ */
+void handleHook(Webserver* webserver) {
+    JsonDocument reply;
+    reply[F("action")] = "none";
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+    JsonDocument doc;
+    const String& body = webserver->raw().arg("plain");
+    if (body.length() > MAX_PUSH_BODY || deserializeJson(doc, body) != DeserializationError::Ok) {
+        sendJsonDoc(webserver, HTTP_CODE_OK, reply);
+
+        return;
+    }
+
+    auto text = [&doc](const __FlashStringHelper* key) -> const char* {
+        return doc[key].is<const char*>() ? doc[key].as<const char*>() : "";
+    };
+    Attention::HookEvent event;
+    event.event = text(F("event"));
+    event.type = text(F("type"));
+    event.session = text(F("session"));
+    event.cwd = text(F("cwd"));
+    event.tool = text(F("tool"));
+    event.detail = text(F("detail"));
+    event.message = text(F("message"));
+
+    const Attention::Agent agent = Attention::agentFrom(webserver->raw().arg("agent").c_str());
+    const uint32_t now = AttentionQueue::now();
+    Attention::Item item;
+    Attention::Item extra;
+    const Attention::HookAction action =
+        Attention::fromHook(agent, event, mainAgentDoneCards(), mainApprovalTtlS(), now, item, &extra);
+    AgentTracker::onHook(agent, event);
+    if (action == Attention::HOOK_UPSERT) {
+        AttentionQueue::put(item);
+        if (extra.used) {
+            AttentionQueue::put(extra);
+        }
+        reply[F("action")] = "show";
+    } else if (action == Attention::HOOK_CLEAR) {
+        const bool cleared = AttentionQueue::clear(item.id);
+        String doneId = String(item.id) + ":done";  // a Codex DONE card lives next to the session's own card
+        AttentionQueue::clear(doneId.c_str());
+        reply[F("action")] = cleared ? "cleared" : "none";
+    }
+    sendJsonDoc(webserver, HTTP_CODE_OK, reply);
+}
+/** @brief Which agent sessions are working, waiting for you or done. Ids are hashes of the agents' session ids. */
+void handleAgents(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+    JsonDocument reply;
+    const AgentSessions::Table& table = AgentTracker::table();
+    int working = 0;
+    int waiting = 0;
+    int done = 0;
+    AgentSessions::counts(table, working, waiting, done);
+    reply[F("working")] = working;
+    reply[F("waiting")] = waiting;
+    reply[F("done")] = done;
+    JsonArray list = reply[F("sessions")].to<JsonArray>();
+    const uint32_t now = AttentionQueue::now();
+    for (const AgentSessions::Session& session : table.s) {
+        if (session.state == AgentSessions::S_FREE) {
+            continue;
+        }
+        JsonObject row = list.add<JsonObject>();
+        row[F("id")] = session.id;
+        row[F("agent")] = Attention::agentName(session.agent);
+        row[F("project")] = session.project;
+        row[F("state")] = AgentSessions::stateName(session.state);
+        row[F("run_s")] = static_cast<int32_t>(now - session.startedS);
+        row[F("since_s")] = static_cast<int32_t>(now - session.changedS);
+        row[F("last_event_s")] = static_cast<int32_t>(now - session.lastS);
+    }
+    sendJsonDoc(webserver, HTTP_CODE_OK, reply);
+}
 }  // namespace
 
 void registerPushEndpoints(Webserver* webserver) {
@@ -129,8 +214,19 @@ void registerPushEndpoints(Webserver* webserver) {
     // responses=200:application/json,400:application/json,401:application/json
     webserver->route("/api/v1/push/clear", HTTP_POST, handlePushClear);
 
+    // @openapi {post} /hook version=v1 group=Push summary="Agent hook event (Claude Code / Codex): shows or clears that session's card" requiresAuth=true
+    // requestBody=application/json requestBodySchema=event:string,type:string,session:string,cwd:string,tool:string,detail:string,message:string
+    // example={"event":"Notification","type":"permission_prompt","session":"abc12345","cwd":"/home/me/proj","tool":"Bash","detail":"npm test"}
+    // responses=200:application/json,401:application/json
+    webserver->route("/api/v1/hook", HTTP_POST, handleHook);
+
+    // @openapi {get} /agents version=v1 group=Push summary="Agent sessions the cube is tracking: working, waiting for you, done" requiresAuth=true
+    // responses=200:application/json,401:application/json
+    webserver->route("/api/v1/agents", HTTP_GET, handleAgents);
+
     // glimmer-compatible paths (its hook script and MCP bridge post here)
     webserver->route("/push", HTTP_POST, handlePush);
     webserver->route("/push", HTTP_GET, handlePushList);
     webserver->route("/push/clear", HTTP_POST, handlePushClear);
+    webserver->route("/hook", HTTP_POST, handleHook);
 }

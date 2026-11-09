@@ -30,6 +30,8 @@
 #include "chrome.h"
 #include <ESP8266WiFi.h>
 #include <time.h>
+
+#include "ui/AgentTracker.h"
 #include <math.h>
 
 
@@ -44,6 +46,7 @@ static float   s_tempC = -999.f;
 static uint8_t s_code = 255;
 // Clock x-geometry cached on first paint
 static bool    s_geomReady = false;
+static uint32_t s_agentRev = 0;
 static int     s_hhX = 8, s_colonX = 0, s_mmX = 0, s_digitW = 0;
 
 bool chHomeEnabled(const ChannelCtx& ctx) {
@@ -225,6 +228,17 @@ static uint16_t footerText(const ChannelCtx& ctx, char* buf, size_t n) {
         snprintf_P(buf, n, PSTR("%s %s LEFT"), p.name, d);
         return Theme::AMBER;
     }
+    int working, waiting, done;
+    AgentSessions::counts(AgentTracker::table(), working, waiting, done);
+    if (working + waiting > 0) {
+        snprintf_P(buf, n, PSTR("%d AGENT%s %s"), working + waiting, (working + waiting) == 1 ? "" : "S",
+                   waiting > 0 ? "NEED YOU" : "WORKING");
+        return waiting > 0 ? Theme::AMBER : Theme::SKY;
+    }
+    if (done > 0) {
+        snprintf_P(buf, n, PSTR("%d AGENT%s DONE"), done, done == 1 ? "" : "S");
+        return Theme::MINT;
+    }
     Weather::rainHint(*ctx.settings, buf, n);
     if (buf[0]) return Theme::SKY;
     snprintf_P(buf, n, PSTR("HOME"));
@@ -354,7 +368,8 @@ void chHomeTick(const ChannelCtx& ctx) {
     if (colonOn != s_colonOn) paintColon(colonOn);
     if (tmv.tm_min != s_mm) { paintMM(tmv.tm_min); s_mm = tmv.tm_min; }
     if (tmv.tm_hour != s_hh) { paintHH(tmv.tm_hour, ctx.settings->clock24h); s_hh = tmv.tm_hour; }
-    if (tmv.tm_min != s_rainMin) {
+    if (tmv.tm_min != s_rainMin || AgentTracker::revision() != s_agentRev) {
+        s_agentRev = AgentTracker::revision();
         char foot[32]; uint16_t fc = footerText(ctx, foot, sizeof(foot));
         if (strcmp(foot, s_rain) != 0) paintFooterLeft(foot, fc);
         s_rainMin = tmv.tm_min;
