@@ -573,7 +573,7 @@ paths:
         - "System"
       security:
         - bearerAuth: []
-      description: "**Requires Authentication** - Firmware version, uptime, heap and last reset reason. This endpoint requires a valid bearer token in the Authorization header."
+      description: "**Requires Authentication** - Firmware version, uptime, heap and last reset reason. After a crash (last_reset_was_crash) it adds exccause, epc1, excvaddr, crash_free_heap (free heap at the crash), crash_wifi_status (0 idle, 1 connecting, 2 wrong password, 3 no AP, 4 failed, 5 got IP) and trace (stack return addresses; decode with xtensa-lx106-elf-addr2line -e firmware.elf). This endpoint requires a valid bearer token in the Authorization header."
   /api/v1/ui:
     get:
       summary: "Get display settings, channel and current time"
@@ -705,7 +705,7 @@ paths:
         - "Credentials"
       security:
         - bearerAuth: []
-      description: "**Requires Authentication** - Which Claude/Codex credentials are set (never the values). This endpoint requires a valid bearer token in the Authorization header."
+      description: "**Requires Authentication** - Which Claude/Codex credentials are set (never the values). For a set Codex token it also reports its shape only: codex_token_len, codex_token_dots (a JWT has 2), codex_token_starts_eyJ, and codex_device_id_len, to spot a truncated or wrongly copied paste. This endpoint requires a valid bearer token in the Authorization header."
     post:
       summary: "Set or clear Claude/Codex credentials (write-only)"
       operationId: "op_v1_post_api_v1_credentials"
@@ -950,7 +950,7 @@ paths:
         - "Usage"
       security:
         - bearerAuth: []
-      description: "**Requires Authentication** - Claude/Codex usage snapshots and fetch state (no credentials). This endpoint requires a valid bearer token in the Authorization header."
+      description: "**Requires Authentication** - Claude/Codex usage snapshots and fetch state (no credentials). min_heap_in_fetch is the lowest free heap (bytes) seen during the last fetch; below about 1000 expect Wi-Fi stack crashes. This endpoint requires a valid bearer token in the Authorization header."
   /api/v1/usage/refresh:
     post:
       summary: "Resume and fetch the usage sources as soon as possible (clears a stopped or rejected state)"
