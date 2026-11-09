@@ -889,6 +889,84 @@ paths:
               example:
                 id: "tests"
         required: true
+  /api/v1/hook:
+    post:
+      summary: "Agent hook event (Claude Code / Codex): shows or clears that session's card and tracks the session"
+      operationId: "op_v1_post_api_v1_hook"
+      responses:
+        200:
+          description: "Always 200 (an agent is never blocked); action is show, cleared or none"
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Push"
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agent
+          in: query
+          schema:
+            type: "string"
+            enum: ["claude", "codex"]
+      description: "**Requires Authentication** - Sent by tools/agents/cube-hook.sh. The session is identified by a hash of the agent's full session id."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                event:
+                  type: "string"
+                type:
+                  type: "string"
+                session:
+                  type: "string"
+                cwd:
+                  type: "string"
+                tool:
+                  type: "string"
+                detail:
+                  type: "string"
+                message:
+                  type: "string"
+              example:
+                event: "Notification"
+                type: "permission_prompt"
+                session: "abc12345"
+                cwd: "/home/me/proj"
+                tool: "Bash"
+                detail: "npm test"
+        required: true
+  /api/v1/agents:
+    get:
+      summary: "Agent sessions the cube is tracking: working, waiting for you, done"
+      operationId: "op_v1_get_api_v1_agents"
+      responses:
+        200:
+          description: "working/waiting/done counts and sessions[] with id, agent, project, state, run_s, since_s, last_event_s"
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Push"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Sessions are RAM only and expire by themselves: working/waiting after 30 min of silence, done after 15 min."
   /api/v1/display/debug:
     post:
       summary: "Display bring-up debugging (reinit, fill, backlight, invert)"
