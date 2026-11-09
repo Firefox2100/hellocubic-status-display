@@ -199,19 +199,25 @@ inline auto kindFromName(const char* name, uint8_t& out) -> bool {
 
 }  // namespace detail
 
+#if defined(ARDUINO)
+using Msg = const __FlashStringHelper*;  // validation messages stay in flash on the device
+#else
+using Msg = const char*;
+#endif
+
 /**
  * @brief Build a Record from one event object. `lastFired` is left 0: the store keeps the old value for a known id.
  * @return nullptr on success, otherwise a message for the 400 reply.
  */
-inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
+inline auto fromJson(JsonVariantConst doc, Record& out) -> Msg {
     if (!doc.is<JsonObjectConst>()) {
-        return "an event must be a JSON object";
+        return F("an event must be a JSON object");
     }
     Record record = blank();
 
     const char* id = doc["id"].is<const char*>() ? doc["id"].as<const char*>() : "";
     if (!validId(id)) {
-        return "id is required: 1-16 characters of A-Z a-z 0-9 . _ -";
+        return F("id is required: 1-16 characters of A-Z a-z 0-9 . _ -");
     }
     detail::copyText(record.id, id);
 
@@ -219,15 +225,15 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
     if (modeChange) {
         Presence::Mode mode = Presence::Mode::Normal;
         if (!doc[F("mode")].is<const char*>() || !Presence::modeFrom(doc[F("mode")].as<const char*>(), mode)) {
-            return "mode must be normal, busy, away or relaxing";
+            return F("mode must be normal, busy, away or relaxing");
         }
         const char* text = doc[F("text")].is<const char*>() ? doc[F("text")].as<const char*>() : "";
         if (strlen(text) > Presence::TEXT_MAX) {
-            return "text is at most 27 characters";
+            return F("text is at most 27 characters");
         }
         const char* gif = doc[F("gif")].is<const char*>() ? doc[F("gif")].as<const char*>() : "";
         if (*gif != '\0' && !Presence::validGifName(gif)) {
-            return "gif must be a plain file name";
+            return F("gif must be a plain file name");
         }
         record.flags = static_cast<uint8_t>(record.flags | FLAG_MODE);
         record.kind = static_cast<uint8_t>(mode);
@@ -236,7 +242,7 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
     } else {
         const char* title = doc[F("title")].is<const char*>() ? doc[F("title")].as<const char*>() : "";
         if (*title == '\0') {
-            return "title is required";
+            return F("title is required");
         }
         detail::copyText(record.title, title);
         detail::copyText(record.body, doc[F("body")].is<const char*>() ? doc[F("body")].as<const char*>() : "");
@@ -244,7 +250,7 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
 
         uint8_t kind = static_cast<uint8_t>(Attention::K_INFO);
         if (doc[F("kind")].is<const char*>() && !detail::kindFromName(doc[F("kind")].as<const char*>(), kind)) {
-            return "unknown kind";
+            return F("unknown kind");
         }
         record.kind = kind;
 
@@ -254,7 +260,7 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         }
         record.icon = static_cast<uint8_t>(Attention::iconFrom(icon));
         if (*icon != '\0' && record.icon == Attention::ICON_NONE) {
-            return "unknown icon";
+            return F("unknown icon");
         }
 
         record.display = static_cast<uint8_t>(kind == Attention::K_PROGRESS ? Attention::SHOW_QUEUE : Attention::SHOW_INTERRUPT);
@@ -265,21 +271,21 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
             } else if (strcmp(display, "interrupt") == 0) {
                 record.display = static_cast<uint8_t>(Attention::SHOW_INTERRUPT);
             } else {
-                return "display must be interrupt or queue";
+                return F("display must be interrupt or queue");
             }
         }
 
         if (!doc[F("ttl_s")].isNull()) {
             const double ttl = doc[F("ttl_s")].as<double>();
             if (!doc[F("ttl_s")].is<double>() || ttl < 0 || ttl > static_cast<double>(MAX_TTL_S)) {
-                return "ttl_s must be 0-86400";
+                return F("ttl_s must be 0-86400");
             }
             record.ttlS = static_cast<uint16_t>(ttl);
         }
     }
     if (!doc[F("enabled")].isNull()) {
         if (!doc[F("enabled")].is<bool>()) {
-            return "enabled must be true or false";
+            return F("enabled must be true or false");
         }
         record.flags = static_cast<uint8_t>((record.flags & ~FLAG_ENABLED) | (doc[F("enabled")].as<bool>() ? FLAG_ENABLED : 0));
     }
@@ -288,12 +294,12 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
     const bool hasAt = !doc["at"].isNull();
     const bool hasRepeat = !doc[F("repeat")].isNull();
     if (hasAt == hasRepeat) {
-        return "give either \"at\" (one-off) or \"repeat\" with \"time\" (recurring)";
+        return F("give either \"at\" (one-off) or \"repeat\" with \"time\" (recurring)");
     }
     if (hasAt) {
         time_t instant = 0;
         if (!detail::instantFrom(doc["at"], instant)) {
-            return "at must be epoch seconds or ISO 8601 with an offset (Z or +hh:mm)";
+            return F("at must be epoch seconds or ISO 8601 with an offset (Z or +hh:mm)");
         }
         record.at = static_cast<uint32_t>(instant);
     } else {
@@ -305,21 +311,21 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         } else if (strcmp(repeat, "monthly") == 0) {
             record.repeat = static_cast<uint8_t>(Schedule::Repeat::Monthly);
         } else {
-            return "repeat must be daily, weekly or monthly";
+            return F("repeat must be daily, weekly or monthly");
         }
         if (!detail::minuteOfDayFrom(doc[F("time")].is<const char*>() ? doc[F("time")].as<const char*>() : nullptr, record.minuteOfDay)) {
-            return "time must be local HH:MM";
+            return F("time must be local HH:MM");
         }
         if (record.repeat == static_cast<uint8_t>(Schedule::Repeat::Weekly)) {
             JsonArrayConst days = doc[F("days")].as<JsonArrayConst>();
             if (days.isNull() || days.size() == 0) {
-                return "weekly needs days, for example [\"mon\",\"wed\"]";
+                return F("weekly needs days, for example [\"mon\",\"wed\"]");
             }
             record.weekdayMask = 0;
             for (JsonVariantConst day : days) {
                 const int number = detail::weekdayFrom(day);
                 if (number < 0) {
-                    return "days must be sun..sat or 0-6";
+                    return F("days must be sun..sat or 0-6");
                 }
                 record.weekdayMask = static_cast<uint8_t>(record.weekdayMask | (1U << static_cast<unsigned>(number)));
             }
@@ -327,20 +333,20 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         if (record.repeat == static_cast<uint8_t>(Schedule::Repeat::Monthly)) {
             const int day = doc[F("day")].is<int>() ? doc[F("day")].as<int>() : 0;
             if (day < 1 || day > MAX_DAY_OF_MONTH) {
-                return "monthly needs day 1-31";
+                return F("monthly needs day 1-31");
             }
             record.dayOfMonth = static_cast<uint8_t>(day);
         }
         time_t bound = 0;
         if (!doc[F("from")].isNull()) {
             if (!detail::instantFrom(doc[F("from")], bound)) {
-                return "from must be epoch seconds or ISO 8601 with an offset";
+                return F("from must be epoch seconds or ISO 8601 with an offset");
             }
             record.from = static_cast<uint32_t>(bound);
         }
         if (!doc[F("until")].isNull()) {
             if (!detail::instantFrom(doc[F("until")], bound)) {
-                return "until must be epoch seconds or ISO 8601 with an offset";
+                return F("until must be epoch seconds or ISO 8601 with an offset");
             }
             record.until = static_cast<uint32_t>(bound);
         }

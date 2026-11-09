@@ -26,7 +26,7 @@ constexpr int HTTP_CODE_TOO_LARGE = 413;
 constexpr int HTTP_CODE_CONFLICT = 409;
 constexpr long REASONABLE_EPOCH = 1000000000L;
 
-void sendError(Webserver* webserver, int code, const String& message, int index = -1) {
+void sendError(Webserver* webserver, int code, const __FlashStringHelper* message, int index = -1) {
     JsonDocument doc;
     doc[F("status")] = "error";
     doc[F("message")] = message;
@@ -45,12 +45,12 @@ void sendText(Webserver* webserver, int code, const String& json) {
 auto parseBody(Webserver* webserver, JsonDocument& doc) -> bool {
     const String& body = webserver->raw().arg("plain");
     if (body.length() > MAX_BODY) {
-        sendError(webserver, HTTP_CODE_TOO_LARGE, "body too large (6 KB max): send fewer events per request");
+        sendError(webserver, HTTP_CODE_TOO_LARGE, F("body too large (6 KB max): send fewer events per request"));
 
         return false;
     }
     if (deserializeJson(doc, body) != DeserializationError::Ok) {
-        sendError(webserver, HTTP_CODE_BAD_REQUEST, "bad json");
+        sendError(webserver, HTTP_CODE_BAD_REQUEST, F("bad json"));
 
         return false;
     }
@@ -88,7 +88,7 @@ void handleList(Webserver* webserver) {
     if (server.hasArg("id")) {
         Events::Record record;
         if (EventStore::find(server.arg("id").c_str(), &record) < 0) {
-            sendError(webserver, HTTP_CODE_NOT_FOUND, "no such event");
+            sendError(webserver, HTTP_CODE_NOT_FOUND, F("no such event"));
 
             return;
         }
@@ -125,11 +125,11 @@ void handleList(Webserver* webserver) {
 }
 
 /** @brief Validate every event of a batch before anything is stored, so a bad one changes nothing. */
-auto validateBatch(JsonArrayConst events, int& badIndex) -> const char* {
+auto validateBatch(JsonArrayConst events, int& badIndex) -> Events::Msg {
     int index = 0;
     for (JsonVariantConst item : events) {
         Events::Record scratch;
-        if (const char* error = Events::fromJson(item, scratch); error != nullptr) {
+        if (const Events::Msg error = Events::fromJson(item, scratch); error != nullptr) {
             badIndex = index;
 
             return error;
@@ -149,7 +149,7 @@ auto batchOf(Webserver* webserver, JsonDocument& doc, JsonArrayConst& events, Js
         events = single.as<JsonArrayConst>();
     }
     if (events.size() == 0 || events.size() > MAX_BATCH) {
-        sendError(webserver, HTTP_CODE_BAD_REQUEST, "send 1-16 events per request");
+        sendError(webserver, HTTP_CODE_BAD_REQUEST, F("send 1-16 events per request"));
 
         return false;
     }
@@ -171,7 +171,7 @@ void handleUpsert(Webserver* webserver) {
         return;
     }
     int badIndex = -1;
-    if (const char* error = validateBatch(events, badIndex); error != nullptr) {
+    if (const Events::Msg error = validateBatch(events, badIndex); error != nullptr) {
         sendError(webserver, HTTP_CODE_BAD_REQUEST, error, badIndex);
 
         return;
@@ -183,12 +183,12 @@ void handleUpsert(Webserver* webserver) {
         Events::fromJson(item, record);
         const EventStore::Result result = EventStore::upsert(record);
         if (result == EventStore::Result::Full) {
-            sendError(webserver, HTTP_CODE_CONFLICT, "schedule is full (64 events): delete some or replace it");
+            sendError(webserver, HTTP_CODE_CONFLICT, F("schedule is full (64 events): delete some or replace it"));
 
             return;
         }
         if (result != EventStore::Result::Ok) {
-            sendError(webserver, HTTP_CODE_INTERNAL_ERROR, "could not write the schedule to flash");
+            sendError(webserver, HTTP_CODE_INTERNAL_ERROR, F("could not write the schedule to flash"));
 
             return;
         }
@@ -216,18 +216,18 @@ void handleDelete(Webserver* webserver) {
         return;
     }
     if (!server.hasArg("id")) {
-        sendError(webserver, HTTP_CODE_BAD_REQUEST, "give ?id=<event id>, or ?all=true to clear the schedule");
+        sendError(webserver, HTTP_CODE_BAD_REQUEST, F("give ?id=<event id>, or ?all=true to clear the schedule"));
 
         return;
     }
     const EventStore::Result result = EventStore::remove(server.arg("id").c_str());
     if (result == EventStore::Result::NotFound) {
-        sendError(webserver, HTTP_CODE_NOT_FOUND, "no such event");
+        sendError(webserver, HTTP_CODE_NOT_FOUND, F("no such event"));
 
         return;
     }
     if (result != EventStore::Result::Ok) {
-        sendError(webserver, HTTP_CODE_INTERNAL_ERROR, "could not write the schedule to flash");
+        sendError(webserver, HTTP_CODE_INTERNAL_ERROR, F("could not write the schedule to flash"));
 
         return;
     }
@@ -249,18 +249,18 @@ void handleReplace(Webserver* webserver) {
 
     JsonArrayConst events = doc[F("events")].as<JsonArrayConst>();
     if (events.isNull() && !(doc[F("events")].isNull() && commit)) {
-        sendError(webserver, HTTP_CODE_BAD_REQUEST, "events must be an array (it may be empty to clear the schedule)");
+        sendError(webserver, HTTP_CODE_BAD_REQUEST, F("events must be an array (it may be empty to clear the schedule)"));
 
         return;
     }
     if (!events.isNull() && events.size() > MAX_BATCH) {
-        sendError(webserver, HTTP_CODE_BAD_REQUEST, "send at most 16 events per request: use begin / commit to send more");
+        sendError(webserver, HTTP_CODE_BAD_REQUEST, F("send at most 16 events per request: use begin / commit to send more"));
 
         return;
     }
     int badIndex = -1;
     if (!events.isNull()) {
-        if (const char* error = validateBatch(events, badIndex); error != nullptr) {
+        if (const Events::Msg error = validateBatch(events, badIndex); error != nullptr) {
             sendError(webserver, HTTP_CODE_BAD_REQUEST, error, badIndex);
 
             return;
@@ -268,7 +268,7 @@ void handleReplace(Webserver* webserver) {
     }
 
     if (begin && EventStore::beginReplace() != EventStore::Result::Ok) {
-        sendError(webserver, HTTP_CODE_INTERNAL_ERROR, "could not start the replacement");
+        sendError(webserver, HTTP_CODE_INTERNAL_ERROR, F("could not start the replacement"));
 
         return;
     }
@@ -279,13 +279,13 @@ void handleReplace(Webserver* webserver) {
             const EventStore::Result result = EventStore::appendReplace(record);
             if (result == EventStore::Result::Full) {
                 EventStore::abortReplace();
-                sendError(webserver, HTTP_CODE_CONFLICT, "more than 64 events: the old schedule was left unchanged");
+                sendError(webserver, HTTP_CODE_CONFLICT, F("more than 64 events: the old schedule was left unchanged"));
 
                 return;
             }
             if (result != EventStore::Result::Ok) {
                 EventStore::abortReplace();
-                sendError(webserver, HTTP_CODE_BAD_REQUEST, "no replacement in progress: start with begin=true");
+                sendError(webserver, HTTP_CODE_BAD_REQUEST, F("no replacement in progress: start with begin=true"));
 
                 return;
             }
@@ -295,7 +295,7 @@ void handleReplace(Webserver* webserver) {
     reply[F("staged")] = EventStore::replaceCount();
     if (commit) {
         if (EventStore::commitReplace() != EventStore::Result::Ok) {
-            sendError(webserver, HTTP_CODE_BAD_REQUEST, "nothing to commit: start with begin=true");
+            sendError(webserver, HTTP_CODE_BAD_REQUEST, F("nothing to commit: start with begin=true"));
 
             return;
         }
@@ -314,7 +314,7 @@ void handleFire(Webserver* webserver) {
     }
     ESP8266WebServer& server = webserver->raw();
     if (!server.hasArg("id") || !EventScheduler::fireNow(server.arg("id").c_str())) {
-        sendError(webserver, HTTP_CODE_NOT_FOUND, "no such event");
+        sendError(webserver, HTTP_CODE_NOT_FOUND, F("no such event"));
 
         return;
     }
