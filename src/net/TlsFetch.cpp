@@ -8,6 +8,8 @@
 #include <Logger.h>
 #include <WiFiClientSecureBearSSL.h>
 
+#include <Ticker.h>
+
 #include <array>
 #include <cstring>
 #include <ctime>
@@ -18,12 +20,25 @@
 namespace {
 constexpr const char* LOG_TAG = "TlsFetch";
 constexpr uint16_t RX_BUFFER_BYTES = 4096;  // the certificate chain arrives in one record
-constexpr uint16_t TX_BUFFER_BYTES = 1024;
+constexpr uint16_t TX_BUFFER_BYTES = 512;
 constexpr uint32_t HTTP_TIMEOUT_MS = 10000;  // bounds how long a silent server can freeze the main loop (one retry: ~20 s worst case)
 constexpr uint32_t MARKUP_PEEK_MS = 2000;
 constexpr uint32_t PEEK_POLL_MS = 5;
 constexpr long REASONABLE_EPOCH = 1000000000L;
 constexpr uint32_t RETRY_DELAY_MS = 200;
+constexpr uint32_t SAMPLE_PERIOD_MS = 2;
+
+// Lowest free heap seen during the last fetch. A handshake runs the heap down to almost nothing, and the Wi-Fi
+// SDK crashes (null write in ieee80211_setup_ratetable) if it needs memory then, so the margin is worth watching.
+uint32_t g_minFree = 0;
+Ticker g_sampler;
+
+void sampleHeap() {
+    const uint32_t freeNow = ESP.getFreeHeap();  // NOLINT(readability-static-accessed-through-instance)
+    if (freeNow < g_minFree) {
+        g_minFree = freeNow;
+    }
+}
 
 /** @brief Read the first non-blank byte of an error body: '<' means HTML (an edge challenge), not JSON. */
 auto bodyIsMarkup(HTTPClient& http) -> bool {
@@ -77,8 +92,6 @@ auto getOnce(const char* url, const std::function<void(HTTPClient&)>& addHeaders
         anchors.append(TrustAnchors::LE_YE1);
         anchors.append(TrustAnchors::LE_YE2);
         anchors.append(TrustAnchors::LE_YE3);
-        anchors.append(TrustAnchors::ISRG_ROOT_X2);
-        anchors.append(TrustAnchors::ISRG_ROOT_X1);
         client.setTrustAnchors(&anchors);
         client.setX509Time(time(nullptr));
     } else {
@@ -99,6 +112,8 @@ auto getOnce(const char* url, const std::function<void(HTTPClient&)>& addHeaders
     http.collectHeaders(COLLECTED.data(), COLLECTED.size());
     addHeaders(http);
 
+    g_minFree = ESP.getFreeHeap();  // NOLINT(readability-static-accessed-through-instance)
+    g_sampler.attach_ms(SAMPLE_PERIOD_MS, sampleHeap);
     result.code = http.GET();
     if (result.code < 0) {
         const uint32_t freeHeap = ESP.getFreeHeap();         // NOLINT(readability-static-accessed-through-instance)
@@ -113,12 +128,15 @@ auto getOnce(const char* url, const std::function<void(HTTPClient&)>& addHeaders
     } else if (result.code == HTTP_CODE_UNAUTHORIZED || result.code == HTTP_CODE_FORBIDDEN) {
         result.markup = bodyIsMarkup(http);
     }
+    g_sampler.detach();
     http.end();
     client.stop();  // stop() is what stores the session parameters for the next resumption
 
     return result;
 }
 }  // namespace
+
+auto TlsFetch::minFreeHeap() -> uint32_t { return g_minFree; }
 
 auto TlsFetch::heapOk() -> bool {
     return ESP.getMaxFreeBlockSize() >= MIN_BLOCK_BYTES;  // NOLINT(readability-static-accessed-through-instance)

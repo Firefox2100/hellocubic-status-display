@@ -315,6 +315,17 @@ void codexHeaders(HTTPClient& http, String& authorization, const String& deviceI
 /** @brief The Authorization header value. Built so that only one extra copy of the token exists. */
 auto bearerValue() -> String {
     String token = CredentialStore::get(CredentialStore::CODEX_TOKEN);
+    // The token is often pasted with the header name, "Bearer ", quotes or a trailing backslash around it. A JWT starts
+    // with "eyJ" and only holds base64url characters and dots, so keep exactly that run.
+    const int start = token.indexOf("eyJ");
+    if (start >= 0) {
+        auto end = static_cast<size_t>(start);
+        while (end < token.length() && (isalnum(static_cast<unsigned char>(token[end])) != 0 || token[end] == '-' ||
+                                        token[end] == '_' || token[end] == '.')) {
+            end++;
+        }
+        token = token.substring(static_cast<unsigned int>(start), end);
+    }
     if (token.isEmpty()) {
         return {};
     }
@@ -689,6 +700,7 @@ void UsageManager::fillStatus(JsonDocument& doc) {
     doc[F("tls_verify")] = settings.tlsVerify;
     doc[F("refresh_min")] = settings.refreshMin;
     doc[F("heap_refusals")] = g_heapRefusals;
+    doc[F("min_heap_in_fetch")] = TlsFetch::minFreeHeap();
     doc[F("time_synced")] = timeSynced();
     for (size_t i = 0; i < g_jobs.size(); i++) {
         const JobState& job = g_jobs.at(i);

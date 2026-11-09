@@ -26,6 +26,9 @@ struct Result {
     uint32_t elapsedMs = 0;
 };
 
+/** @brief Lowest free heap (bytes) seen during the most recent fetch, sampled every 2 ms. */
+auto minFreeHeap() -> uint32_t;
+
 /** @brief True when the largest free heap block is big enough to start a handshake. */
 auto heapOk() -> bool;
 
