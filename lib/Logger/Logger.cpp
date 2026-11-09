@@ -22,6 +22,8 @@
 #include <cstdlib>
 #include "Logger.h"
 
+#include <array>
+
 char* Logger::_logBuffer = nullptr;
 size_t Logger::_head = 0;
 size_t Logger::_count = 0;
@@ -185,4 +187,16 @@ const char* Logger::levelToString(LogLevel level) {
         default:
             return "UNKNOWN";
     }
+}
+
+void Logger::warn(const __FlashStringHelper* message, const char* className) {
+    std::array<char, LOG_ENTRY_MAX_LEN> text{};
+    strncpy_P(text.data(), reinterpret_cast<PGM_P>(message), text.size() - 1);
+    warn(text.data(), className);
+}
+
+void Logger::error(const __FlashStringHelper* message, const char* className) {
+    std::array<char, LOG_ENTRY_MAX_LEN> text{};
+    strncpy_P(text.data(), reinterpret_cast<PGM_P>(message), text.size() - 1);
+    error(text.data(), className);
 }

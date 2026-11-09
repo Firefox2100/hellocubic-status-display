@@ -98,6 +98,7 @@ void setup() {
     Serial.begin(SERIAL_BAUD_RATE);
     delay(BOOT_DELAY_MS);
     Serial.println("");
+    Logger::reserve();
     Logger::info(("GeekMagic Open Firmware " + String(PROJECT_VER_STR)).c_str());
     Diagnostics::checkpoint(F("start"));
 
@@ -105,11 +106,11 @@ void setup() {
     bool littleFsReadyForStatic = littleFsMounted;
 
     if (!littleFsMounted) {
-        Logger::error("Failed to mount LittleFS");
-        Logger::warn("LittleFS unavailable, static web UI disabled", "Global");
+        Logger::error(F("Failed to mount LittleFS"));
+        Logger::warn(F("LittleFS unavailable, static web UI disabled"), "Global");
     } else if (!littleFsHasEntries()) {
         littleFsReadyForStatic = false;
-        Logger::warn("LittleFS mounted but empty, static web UI disabled", "Global");
+        Logger::warn(F("LittleFS mounted but empty, static web UI disabled"), "Global");
     }
 
     SecureStorage::setSalt(KV_SALT_STR);
@@ -157,7 +158,7 @@ void setup() {
 
     if (!littleFsReadyForStatic) {
         httpUpdater.setup(&webserver->raw(), "/legacyupdate");
-        Logger::warn("Enabled legacy OTA route because LittleFS is unavailable or empty", "Global");
+        Logger::warn(F("Enabled legacy OTA route because LittleFS is unavailable or empty"), "Global");
     } else {
         webserver->serveStaticC("/", "/web/index.html", "text/html");
         webserver->serveStaticC("/config.json", "/config.json", "application/json");

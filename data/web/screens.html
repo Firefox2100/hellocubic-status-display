@@ -63,6 +63,43 @@
           <label><input type="checkbox" x-model="ui.claude_weekly_hero" /> Claude: weekly figure first</label>
           <label><input type="checkbox" x-model="ui.codex_weekly_hero" /> Codex: weekly figure first</label>
         </fieldset>
+        <h3>Night</h3>
+        <p>
+          At night the cube shows a dim clock only (no rotation), or turns the screen off. With the dim clock,
+          notifications still appear; with the screen off, nothing does.
+        </p>
+        <label>Night starts
+          <select x-model="night.mode">
+            <option value="disabled">Never (no night mode)</option>
+            <option value="sunset">At sunset, ends at sunrise (needs weather)</option>
+            <option value="schedule">At set times</option>
+            <option value="manual">Only when I switch it on</option>
+          </select>
+        </label>
+        <div class="grid" x-show="night.mode === 'schedule' || night.mode === 'sunset'">
+          <label><span x-text="night.mode === 'sunset' ? 'Fallback start (no weather data)' : 'From'"></span>
+            <input type="time" x-model="night.start" /></label>
+          <label><span x-text="night.mode === 'sunset' ? 'Fallback end' : 'Until'"></span>
+            <input type="time" x-model="night.end" /></label>
+        </div>
+        <label x-show="night.mode !== 'disabled'">At night
+          <select x-model="night.style">
+            <option value="face">Show the dim night clock (notifications still appear)</option>
+            <option value="off">Turn the screen off (even for notifications)</option>
+          </select>
+        </label>
+        <label x-show="night.mode !== 'disabled' && night.style === 'face'">Night clock brightness
+          <input type="range" min="1" max="100" x-model.number="night.brightness" />
+          <small x-text="night.brightness + '%'"></small>
+        </label>
+        <div style="display: flex; gap: 0.5em; flex-wrap: wrap">
+          <button type="button" class="primary" @click="saveNight()">Save night settings</button>
+          <button type="button" class="secondary" @click="nightSwitch('on')" x-show="night.mode !== 'disabled'">Night on now</button>
+          <button type="button" class="secondary" @click="nightSwitch('off')" x-show="night.mode !== 'disabled'">Night off now</button>
+          <button type="button" class="secondary" @click="nightSwitch('auto')" x-show="night.mode === 'sunset' || night.mode === 'schedule'">Back to automatic</button>
+        </div>
+        <pre x-text="nightInfo"></pre>
+
         <h3>Weather</h3>
         <p>
           While the weather can be fetched the Home page (clock, weather, usage) replaces the plain clock;

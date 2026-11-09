@@ -26,6 +26,7 @@
 using namespace Attention;
 
 extern bool mainNightFace();
+extern bool mainNightDark();
 extern bool mainPinApprovals();
 extern bool mainAgentNightShow();
 
@@ -52,10 +53,9 @@ static uint16_t agentColor(Agent a) {
 
 // At night (night face up) only these get through: anything urgent, a user's
 // red card (as before), and — if the user chose so — agents waiting on them.
-static bool allowedAtNight(const Item& it) {
-    if (it.urgent) return true;
-    if (it.kind == K_ERROR && it.agent == AGENT_OTHER && strncmp(it.id, "sys:", 4)) return true;
-    return mainAgentNightShow() && waitsOnUser(it.kind);
+// Here: with the night face every card still shows; only the "screen off" style hides them all.
+static bool allowedAtNight(const Item&) {
+    return !mainNightDark();
 }
 
 // Slots that currently hold the screen, in display order.

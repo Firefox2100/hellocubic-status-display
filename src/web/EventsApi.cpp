@@ -28,10 +28,10 @@ constexpr long REASONABLE_EPOCH = 1000000000L;
 
 void sendError(Webserver* webserver, int code, const String& message, int index = -1) {
     JsonDocument doc;
-    doc["status"] = "error";
-    doc["message"] = message;
+    doc[F("status")] = "error";
+    doc[F("message")] = message;
     if (index >= 0) {
-        doc["index"] = index;
+        doc[F("index")] = index;
     }
     sendJsonDoc(webserver, code, doc);
 }
@@ -72,7 +72,7 @@ auto nextInSeconds(const Events::Record& record) -> long {
 auto eventJson(const Events::Record& record) -> String {
     JsonDocument doc;
     Events::toJson(record, doc, 0);
-    doc[0]["next_in_s"] = nextInSeconds(record);
+    doc[0][F("next_in_s")] = nextInSeconds(record);
     String text;
     serializeJson(doc[0], text);
 
@@ -110,7 +110,7 @@ void handleList(Webserver* webserver) {
     server.send(HTTP_CODE_OK, "application/json", "");
     JsonDocument status;
     EventScheduler::fillStatus(status);
-    status["offset"] = offset;
+    status[F("offset")] = offset;
     String head;
     serializeJson(status, head);
     head.remove(head.length() - 1);  // drop the closing brace: the events array follows
@@ -142,8 +142,8 @@ auto validateBatch(JsonArrayConst events, int& badIndex) -> const char* {
 
 /** @brief The events of a request: {"events":[...]} or a single event object. Empty/oversized batches are refused. */
 auto batchOf(Webserver* webserver, JsonDocument& doc, JsonArrayConst& events, JsonDocument& single) -> bool {
-    if (doc["events"].is<JsonArrayConst>()) {
-        events = doc["events"].as<JsonArrayConst>();
+    if (doc[F("events")].is<JsonArrayConst>()) {
+        events = doc[F("events")].as<JsonArrayConst>();
     } else {
         single.add(doc.as<JsonVariant>());
         events = single.as<JsonArrayConst>();
@@ -195,9 +195,9 @@ void handleUpsert(Webserver* webserver) {
         saved++;
     }
     JsonDocument reply;
-    reply["status"] = "ok";
-    reply["saved"] = saved;
-    reply["count"] = EventStore::count();
+    reply[F("status")] = "ok";
+    reply[F("saved")] = saved;
+    reply[F("count")] = EventStore::count();
     sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 }
 
@@ -209,8 +209,8 @@ void handleDelete(Webserver* webserver) {
     JsonDocument reply;
     if (server.hasArg("all") && server.arg("all") == "true") {
         EventStore::clear();
-        reply["status"] = "ok";
-        reply["count"] = 0;
+        reply[F("status")] = "ok";
+        reply[F("count")] = 0;
         sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 
         return;
@@ -231,8 +231,8 @@ void handleDelete(Webserver* webserver) {
 
         return;
     }
-    reply["status"] = "ok";
-    reply["count"] = EventStore::count();
+    reply[F("status")] = "ok";
+    reply[F("count")] = EventStore::count();
     sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 }
 
@@ -244,11 +244,11 @@ void handleReplace(Webserver* webserver) {
     if (!parseBody(webserver, doc)) {
         return;
     }
-    const bool begin = doc["begin"].isNull() ? true : doc["begin"].as<bool>();
-    const bool commit = doc["commit"].isNull() ? true : doc["commit"].as<bool>();
+    const bool begin = doc[F("begin")].isNull() ? true : doc[F("begin")].as<bool>();
+    const bool commit = doc[F("commit")].isNull() ? true : doc[F("commit")].as<bool>();
 
-    JsonArrayConst events = doc["events"].as<JsonArrayConst>();
-    if (events.isNull() && !(doc["events"].isNull() && commit)) {
+    JsonArrayConst events = doc[F("events")].as<JsonArrayConst>();
+    if (events.isNull() && !(doc[F("events")].isNull() && commit)) {
         sendError(webserver, HTTP_CODE_BAD_REQUEST, "events must be an array (it may be empty to clear the schedule)");
 
         return;
@@ -292,19 +292,19 @@ void handleReplace(Webserver* webserver) {
         }
     }
     JsonDocument reply;
-    reply["staged"] = EventStore::replaceCount();
+    reply[F("staged")] = EventStore::replaceCount();
     if (commit) {
         if (EventStore::commitReplace() != EventStore::Result::Ok) {
             sendError(webserver, HTTP_CODE_BAD_REQUEST, "nothing to commit: start with begin=true");
 
             return;
         }
-        reply["committed"] = true;
-        reply["count"] = EventStore::count();
+        reply[F("committed")] = true;
+        reply[F("count")] = EventStore::count();
     } else {
-        reply["committed"] = false;
+        reply[F("committed")] = false;
     }
-    reply["status"] = "ok";
+    reply[F("status")] = "ok";
     sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 }
 
@@ -319,7 +319,7 @@ void handleFire(Webserver* webserver) {
         return;
     }
     JsonDocument reply;
-    reply["status"] = "fired";
+    reply[F("status")] = "fired";
     sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 }
 

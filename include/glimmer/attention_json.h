@@ -2,6 +2,10 @@
 // Adapted from glimmer (https://github.com/Avinava/glimmer), Copyright (c) 2026 glimmer contributors.
 // Used under the MIT license; see THIRD_PARTY.md.
 #pragma once
+// JSON keys live in flash on the device (literals would cost RAM); on the host F() is the identity
+#if !defined(ARDUINO) && !defined(F)
+#define F(text) (text)
+#endif
 // JSON (POST /push body, MCP push_card arguments) → attention item.
 // Pure (ArduinoJson only), host-tested — including the legacy push fields.
 //
@@ -31,36 +35,36 @@ inline void fromJson(JsonVariantConst d, uint32_t now, uint32_t approvalTtlS,
     if (*id) copyStr(it.id, sizeof(it.id), id);
     else     snprintf(it.id, sizeof(it.id), "push:%lu", (unsigned long)autoSeq);
 
-    const char* kind = d["kind"] | "";
-    it.kind  = *kind ? kindFrom(kind) : kindFromColor(d["color"] | "");
-    it.agent = agentFrom(d["agent"] | "");
-    const char* icon = d["icon"] | "";
-    it.icon = iconFrom(*icon ? icon : (d["type"] | ""));   // "type" is accepted as an alias of "icon"
-    copyStr(it.title,   sizeof(it.title),   d["title"] | "");
-    copyStr(it.value,   sizeof(it.value),   d["value"] | "");
-    const char* body = d["body"] | "";
-    copyStr(it.body,    sizeof(it.body),    *body ? body : (d["subtitle"] | ""));
-    copyStr(it.project, sizeof(it.project), d["project"] | "");
-    it.urgent = d["urgent"] | false;
+    const char* kind = d[F("kind")] | "";
+    it.kind  = *kind ? kindFrom(kind) : kindFromColor(d[F("color")] | "");
+    it.agent = agentFrom(d[F("agent")] | "");
+    const char* icon = d[F("icon")] | "";
+    it.icon = iconFrom(*icon ? icon : (d[F("type")] | ""));   // "type" is accepted as an alias of "icon"
+    copyStr(it.title,   sizeof(it.title),   d[F("title")] | "");
+    copyStr(it.value,   sizeof(it.value),   d[F("value")] | "");
+    const char* body = d[F("body")] | "";
+    copyStr(it.body,    sizeof(it.body),    *body ? body : (d[F("subtitle")] | ""));
+    copyStr(it.project, sizeof(it.project), d[F("project")] | "");
+    it.urgent = d[F("urgent")] | false;
 
-    if (!d["progress"].isNull()) {
-        int p = d["progress"] | 0;
+    if (!d[F("progress")].isNull()) {
+        int p = d[F("progress")] | 0;
         it.progress = (int8_t)(p < 0 ? 0 : p > 100 ? 100 : p);
         if (!it.value[0]) snprintf(it.value, sizeof(it.value), "%d%%", it.progress);
     }
 
-    const char* disp = d["display"] | "";
+    const char* disp = d[F("display")] | "";
     it.display = !strcmp(disp, "queue") ? SHOW_QUEUE
                : !strcmp(disp, "interrupt") ? SHOW_INTERRUPT
                : (it.kind == K_PROGRESS ? SHOW_QUEUE : SHOW_INTERRUPT);
 
-    if (!d["ttl_s"].isNull()) {
-        uint32_t ttl = d["ttl_s"] | 0UL;
+    if (!d[F("ttl_s")].isNull()) {
+        uint32_t ttl = d[F("ttl_s")] | 0UL;
         if (ttl > kMaxTtlS) ttl = kMaxTtlS;
         it.expires = ttl ? now + ttl : 0;
         it.interruptUntil = now + (ttl && ttl < kInterruptS ? ttl : kInterruptS);
-    } else if (!d["duration_s"].isNull()) {           // legacy push
-        uint32_t dur = d["duration_s"] | 30UL;
+    } else if (!d[F("duration_s")].isNull()) {           // legacy push
+        uint32_t dur = d[F("duration_s")] | 30UL;
         if (dur > 300) dur = 300;
         if (dur < 1) dur = 1;
         it.expires = now + dur;
@@ -74,19 +78,19 @@ inline void fromJson(JsonVariantConst d, uint32_t now, uint32_t approvalTtlS,
 
 inline void toJson(const Item& it, uint32_t now, JsonObject o) {
     o["id"]    = it.id;
-    o["kind"]  = kindName(it.kind);
-    o["agent"] = agentName(it.agent);
-    o["title"] = it.title;
-    if (it.value[0])   o["value"]   = it.value;
-    if (it.body[0])    o["body"]    = it.body;
-    if (it.project[0]) o["project"] = it.project;
-    if (it.progress >= 0) o["progress"] = it.progress;
-    if (it.icon) o["icon"] = iconName(it.icon);
-    o["display"] = it.display == SHOW_QUEUE ? "queue" : "interrupt";
-    o["age_s"]   = now >= it.created ? now - it.created : 0;
-    if (it.expires) o["expires_in_s"] = it.expires > now ? it.expires - now : 0;
-    if (it.urgent) o["urgent"] = true;
-    if (it.showAfter > now) o["shows_in_s"] = it.showAfter - now;
+    o[F("kind")]  = kindName(it.kind);
+    o[F("agent")] = agentName(it.agent);
+    o[F("title")] = it.title;
+    if (it.value[0])   o[F("value")]   = it.value;
+    if (it.body[0])    o[F("body")]    = it.body;
+    if (it.project[0]) o[F("project")] = it.project;
+    if (it.progress >= 0) o[F("progress")] = it.progress;
+    if (it.icon) o[F("icon")] = iconName(it.icon);
+    o[F("display")] = it.display == SHOW_QUEUE ? "queue" : "interrupt";
+    o[F("age_s")]   = now >= it.created ? now - it.created : 0;
+    if (it.expires) o[F("expires_in_s")] = it.expires > now ? it.expires - now : 0;
+    if (it.urgent) o[F("urgent")] = true;
+    if (it.showAfter > now) o[F("shows_in_s")] = it.showAfter - now;
 }
 
 }  // namespace Attention

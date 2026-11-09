@@ -100,6 +100,13 @@ auto getOnce(const char* url, const std::function<void(HTTPClient&)>& addHeaders
     addHeaders(http);
 
     result.code = http.GET();
+    if (result.code < 0) {
+        const uint32_t freeHeap = ESP.getFreeHeap();         // NOLINT(readability-static-accessed-through-instance)
+        const uint32_t block = ESP.getMaxFreeBlockSize();    // NOLINT(readability-static-accessed-through-instance)
+        const String detail = String("TLS connect failed: ssl error ") + client.getLastSSLError() + " free=" + freeHeap +
+                              " block=" + block;
+        Logger::warn(detail.c_str(), LOG_TAG);
+    }
     result.retryAfter = FetchPolicy::retryAfterSec(http.header("Retry-After").c_str(), time(nullptr));
     if (result.code == HTTP_CODE_OK) {
         result.parsed = onBody(http.getStream());
@@ -131,7 +138,7 @@ auto TlsFetch::get(const char* url, const std::function<void(HTTPClient&)>& addH
     Result result = getOnce(url, addHeaders, onBody, verify);
     if (result.code < 0 && result.code != -3) {
         // BearSSL handshakes on the ESP8266 fail a few percent of the time under heap pressure: retry once.
-        Logger::warn("TLS request failed, retrying once", LOG_TAG);
+        Logger::warn(F("TLS request failed, retrying once"), LOG_TAG);
         yield();
         delay(RETRY_DELAY_MS);
         result = getOnce(url, addHeaders, onBody, verify);

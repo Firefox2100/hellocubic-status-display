@@ -18,16 +18,16 @@ constexpr int HTTP_CODE_NOT_FOUND_ERR = 404;
 
 void sendError(Webserver* webserver, int code, const char* message) {
     JsonDocument doc;
-    doc["status"] = "error";
-    doc["message"] = message;
+    doc[F("status")] = "error";
+    doc[F("message")] = message;
     sendJsonDoc(webserver, code, doc);
 }
 
 void sendState(Webserver* webserver) {
     JsonDocument doc;
-    doc["mode"] = Presence::modeName(Presence::mode());
-    doc["text"] = Presence::text();
-    doc["gif"] = Presence::gif();
+    doc[F("mode")] = Presence::modeName(Presence::mode());
+    doc[F("text")] = Presence::text();
+    doc[F("gif")] = Presence::gif();
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -50,18 +50,18 @@ void handleSet(Webserver* webserver) {
     }
 
     Presence::Mode mode = Presence::Mode::Normal;
-    if (!Presence::modeFrom(doc["mode"] | "", mode)) {
+    if (!Presence::modeFrom(doc[F("mode")] | "", mode)) {
         sendError(webserver, HTTP_CODE_BAD_REQUEST, "mode must be normal, busy, away or relaxing");
 
         return;
     }
-    const char* text = doc["text"] | "";
+    const char* text = doc[F("text")] | "";
     if (strlen(text) > Presence::TEXT_MAX) {
         sendError(webserver, HTTP_CODE_BAD_REQUEST, "text is at most 27 characters");
 
         return;
     }
-    const char* gif = doc["gif"] | "";
+    const char* gif = doc[F("gif")] | "";
     if (gif[0] != '\0') {
         if (!Presence::validGifName(gif)) {
             sendError(webserver, HTTP_CODE_BAD_REQUEST, "gif must be a plain file name");

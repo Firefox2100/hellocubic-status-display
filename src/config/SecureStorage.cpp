@@ -26,6 +26,9 @@
 
 #include "config/SecureStorage.h"
 
+// F("...") expands to a C array; it keeps the messages out of RAM
+// NOLINTBEGIN(modernize-avoid-c-arrays)
+
 static const std::array<uint8_t, 4> NVS_MAGIC = {{'N', 'V', 'S', '1'}};
 static constexpr uint8_t LEN_SHIFT = 8;
 static constexpr uint8_t LEN_HIGH_IDX = 4;
@@ -103,11 +106,11 @@ auto SecureStorage::begin() -> bool {
     openEeprom();
 
     if (!loadToMemory()) {
-        Logger::warn("No existing NVS data found, initializing new storage", "SecureStorage");
+        Logger::warn(F("No existing NVS data found, initializing new storage"), "SecureStorage");
         _doc.clear();
 
         if (!flushToEEPROM()) {
-            Logger::error("Failed to initialize NVS in EEPROM", "SecureStorage");
+            Logger::error(F("Failed to initialize NVS in EEPROM"), "SecureStorage");
             _ready = false;
             closeEeprom();
 
@@ -144,7 +147,7 @@ auto const SecureStorage::loadToMemory() -> bool {
 
     for (size_t i = 0; i < 4; ++i) {
         if (EEPROM.read((int)i) != NVS_MAGIC[i]) {
-            Logger::warn("NVS magic not found in EEPROM", "SecureStorage");
+            Logger::warn(F("NVS magic not found in EEPROM"), "SecureStorage");
 
             return false;
         }
@@ -155,7 +158,7 @@ auto const SecureStorage::loadToMemory() -> bool {
     size_t payloadMax = _eepromSize - headerSize;
 
     if (len == 0 || len > payloadMax) {
-        Logger::warn("Invalid NVS length in EEPROM", "SecureStorage");
+        Logger::warn(F("Invalid NVS length in EEPROM"), "SecureStorage");
 
         return false;
     }
@@ -217,7 +220,7 @@ auto SecureStorage::writeEeprom() const -> bool {
     size_t written = serializeJson(_doc, out);
 
     if (written == 0 || written > payloadMax) {
-        Logger::error("Serialized NVS too large for EEPROM", "SecureStorage");
+        Logger::error(F("Serialized NVS too large for EEPROM"), "SecureStorage");
 
         return false;
     }
@@ -239,7 +242,7 @@ auto SecureStorage::writeEeprom() const -> bool {
     }
 
     if (!EEPROM.commit()) {
-        Logger::error("EEPROM commit failed", "SecureStorage");
+        Logger::error(F("EEPROM commit failed"), "SecureStorage");
 
         return false;
     }
@@ -259,7 +262,7 @@ auto SecureStorage::writeEeprom() const -> bool {
 auto SecureStorage::put(const char* key, const char* value) -> bool {
     if (!_ready) {
         if (!begin()) {
-            Logger::error("SecureStorage not initialized", "SecureStorage");
+            Logger::error(F("SecureStorage not initialized"), "SecureStorage");
             return false;
         };
     }
@@ -311,3 +314,4 @@ auto SecureStorage::get(const char* key, const char* defaultValue) -> String {
 
     return valuePtr != nullptr ? String(valuePtr) : (defaultValue != nullptr ? String(defaultValue) : String());
 }
+// NOLINTEND(modernize-avoid-c-arrays)

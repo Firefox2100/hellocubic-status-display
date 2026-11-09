@@ -37,27 +37,27 @@ auto Diagnostics::lastResetWasCrash() -> bool {
 }
 
 void Diagnostics::fill(JsonDocument& doc) {
-    doc["firmware"] = PROJECT_VER_STR;
-    doc["uptime_s"] = millis() / MS_PER_SECOND;
-    doc["free_heap"] = ESP.getFreeHeap();                    // NOLINT(readability-static-accessed-through-instance)
-    doc["max_free_block"] = ESP.getMaxFreeBlockSize();           // NOLINT(readability-static-accessed-through-instance)
-    doc["heap_fragmentation"] = ESP.getHeapFragmentation();  // NOLINT(readability-static-accessed-through-instance)
-    doc["reset_reason"] = ESP.getResetReason();              // NOLINT(readability-static-accessed-through-instance)
-    doc["last_reset_was_crash"] = lastResetWasCrash();
+    doc[F("firmware")] = PROJECT_VER_STR;
+    doc[F("uptime_s")] = millis() / MS_PER_SECOND;
+    doc[F("free_heap")] = ESP.getFreeHeap();                    // NOLINT(readability-static-accessed-through-instance)
+    doc[F("max_free_block")] = ESP.getMaxFreeBlockSize();           // NOLINT(readability-static-accessed-through-instance)
+    doc[F("heap_fragmentation")] = ESP.getHeapFragmentation();  // NOLINT(readability-static-accessed-through-instance)
+    doc[F("reset_reason")] = ESP.getResetReason();              // NOLINT(readability-static-accessed-through-instance)
+    doc[F("last_reset_was_crash")] = lastResetWasCrash();
 
     if (g_checkpointCount > 0) {
         for (size_t i = 0; i < g_checkpointCount; i++) {
-            doc["boot_heap"][i]["at"] = String(g_checkpoints.at(i).name);
-            doc["boot_heap"][i]["free"] = g_checkpoints.at(i).freeHeap;
-            doc["boot_heap"][i]["block"] = g_checkpoints.at(i).maxBlock;
+            doc[F("boot_heap")][i]["at"] = String(g_checkpoints.at(i).name);
+            doc[F("boot_heap")][i][F("free")] = g_checkpoints.at(i).freeHeap;
+            doc[F("boot_heap")][i][F("block")] = g_checkpoints.at(i).maxBlock;
         }
     }
 
     const rst_info* info = ESP.getResetInfoPtr();  // NOLINT(readability-static-accessed-through-instance)
     if (info->reason == REASON_EXCEPTION_RST) {
         std::array<char, HEX_TEXT_LEN> hex{};
-        doc["exccause"] = info->exccause;
+        doc[F("exccause")] = info->exccause;
         snprintf(hex.data(), hex.size(), "0x%08x", info->epc1);
-        doc["epc1"] = hex.data();
+        doc[F("epc1")] = hex.data();
     }
 }

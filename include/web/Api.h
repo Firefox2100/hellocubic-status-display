@@ -65,6 +65,7 @@ void registerPushEndpoints(Webserver* webserver);
 void registerEventEndpoints(Webserver* webserver);
 void registerPresenceEndpoints(Webserver* webserver);
 void registerWeatherEndpoints(Webserver* webserver);
+void registerNightEndpoints(Webserver* webserver);
 
 void handleTokenCheck(Webserver* webserver);
 void handleTokenSave(Webserver* webserver);

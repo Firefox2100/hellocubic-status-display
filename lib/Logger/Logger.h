@@ -25,7 +25,7 @@
 enum LogLevel { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR };
 
 static constexpr LogLevel LOG_MIN_LEVEL = LOG_WARN;
-static constexpr size_t LOG_BUFFER_MAX_ENTRIES = 20;
+static constexpr size_t LOG_BUFFER_MAX_ENTRIES = 12;
 static constexpr size_t LOG_ENTRY_MAX_LEN = 96;
 
 class Logger {
@@ -45,6 +45,13 @@ class Logger {
     }
     static void warn(const char* message, const char* className = nullptr);
     static void error(const char* message, const char* className = nullptr);
+    // The same with the message in flash (F("...")): the text never takes RAM
+    static void warn(const __FlashStringHelper* message, const char* className = nullptr);
+    static void error(const __FlashStringHelper* message, const char* className = nullptr);
+
+    // Allocate the log buffer now. Done once at boot: allocated lazily it would land in the middle of the heap at the
+    // first warning and cut the largest free block that a TLS handshake needs.
+    static void reserve() { ensureBufferAllocated(); }
 
     static String getLogsAsString();
     static size_t getLogCount();

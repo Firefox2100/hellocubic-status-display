@@ -17,9 +17,9 @@ uint32_t g_revision = 0;
 
 auto save() -> bool {
     JsonDocument doc;
-    doc["mode"] = Presence::modeName(g_mode);
-    doc["text"] = g_text;
-    doc["gif"] = g_gif;
+    doc[F("mode")] = Presence::modeName(g_mode);
+    doc[F("text")] = g_text;
+    doc[F("gif")] = g_gif;
 
     File file = LittleFS.open(FILE_PATH, "w");
     if (!file) {
@@ -41,14 +41,14 @@ void Presence::begin() {
     const bool parsed = file.size() <= MAX_FILE_BYTES && deserializeJson(doc, file) == DeserializationError::Ok;
     file.close();
     Mode mode = Mode::Normal;
-    if (!parsed || !modeFrom(doc["mode"] | "", mode)) {
-        Logger::warn("Presence file unreadable, starting normal", LOG_TAG);
+    if (!parsed || !modeFrom(doc[F("mode")] | "", mode)) {
+        Logger::warn(F("Presence file unreadable, starting normal"), LOG_TAG);
 
         return;
     }
     g_mode = mode;
-    g_text = String(doc["text"] | "").substring(0, TEXT_MAX);
-    const char* gifName = doc["gif"] | "";
+    g_text = String(doc[F("text")] | "").substring(0, TEXT_MAX);
+    const char* gifName = doc[F("gif")] | "";
     g_gif = validGifName(gifName) ? gifName : "";
 }
 

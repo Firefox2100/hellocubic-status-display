@@ -79,7 +79,7 @@ void refreshSoon() {
 static void save() {
     JsonDocument d;
     d["la"] = s_lat; d["lo"] = s_lon;
-    d["t"] = s_w.tempC; d["f"] = s_w.feelsC; d["c"] = s_w.code; d["day"] = s_w.isDay;
+    d["t"] = s_w.tempC; d["f"] = s_w.feelsC; d["c"] = s_w.code; d[F("day")] = s_w.isDay;
     d["h"] = s_w.humidity; d["w"] = s_w.windKmh; d["ok"] = (uint32_t)s_w.lastOk;
     d["rs"] = (uint32_t)s_w.rainStart;
     JsonArray rp = d["rp"].to<JsonArray>();
@@ -113,7 +113,7 @@ void begin() {
     // A cache from another location is not this place's weather
     if (fabsf((d["la"] | 0.0f) - s_lat) > 0.0001f || fabsf((d["lo"] | 0.0f) - s_lon) > 0.0001f) return;
     s_w.tempC = d["t"] | -999.0f; s_w.feelsC = d["f"] | s_w.tempC;
-    s_w.code = d["c"] | 0; s_w.isDay = d["day"] | true;
+    s_w.code = d["c"] | 0; s_w.isDay = d[F("day")] | true;
     s_w.humidity = d["h"] | -1; s_w.windKmh = d["w"] | -1.0f;
     s_w.lastOk = (time_t)(d["ok"] | 0UL);
     s_w.rainStart = (time_t)(d["rs"] | 0UL);

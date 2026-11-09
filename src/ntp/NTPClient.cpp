@@ -162,7 +162,7 @@ void NTPClient::recordFailure() {
 
     sntp_stop();
 
-    Logger::error("NTP sync failed after retries", TAG);
+    Logger::error(F("NTP sync failed after retries"), TAG);
 }
 
 /**
@@ -231,7 +231,7 @@ auto NTPClient::syncNow() -> bool {
         _lastStatus = "network unavailable";
         _lastOk = false;
 
-        Logger::warn("Manual NTP sync requested but network is unavailable", TAG);
+        Logger::warn(F("Manual NTP sync requested but network is unavailable"), TAG);
 
         return false;
     }

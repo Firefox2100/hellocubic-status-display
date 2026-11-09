@@ -55,7 +55,7 @@ auto CgfPlayer::start(const String& path) -> bool {
     g_source = new FileSource(std::move(file));
     g_player = new Cgf::Player();
     if (!g_player->open(*g_source)) {
-        Logger::warn("Not a usable CGF1 file", LOG_TAG);
+        Logger::warn(F("Not a usable CGF1 file"), LOG_TAG);
         stop();
 
         return false;
@@ -84,7 +84,7 @@ void CgfPlayer::update() {
     const uint16_t duration = g_player->nextFrame(g_sink);
     tft.endWrite();
     if (duration == 0) {
-        Logger::warn("CGF1 file damaged, stopping", LOG_TAG);
+        Logger::warn(F("CGF1 file damaged, stopping"), LOG_TAG);
         stop();
 
         return;

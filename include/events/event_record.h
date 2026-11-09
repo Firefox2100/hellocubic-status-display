@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+// JSON keys live in flash on the device (literals would cost RAM); on the host F() is the identity
+#if !defined(ARDUINO) && !defined(F)
+#define F(text) (text)
+#endif
 
 // A scheduled event as stored on flash, and its JSON form. Pure (ArduinoJson only), unit-tested on the host.
 //
@@ -211,17 +215,17 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
     }
     detail::copyText(record.id, id);
 
-    const bool modeChange = !doc["mode"].isNull();
+    const bool modeChange = !doc[F("mode")].isNull();
     if (modeChange) {
         Presence::Mode mode = Presence::Mode::Normal;
-        if (!doc["mode"].is<const char*>() || !Presence::modeFrom(doc["mode"].as<const char*>(), mode)) {
+        if (!doc[F("mode")].is<const char*>() || !Presence::modeFrom(doc[F("mode")].as<const char*>(), mode)) {
             return "mode must be normal, busy, away or relaxing";
         }
-        const char* text = doc["text"].is<const char*>() ? doc["text"].as<const char*>() : "";
+        const char* text = doc[F("text")].is<const char*>() ? doc[F("text")].as<const char*>() : "";
         if (strlen(text) > Presence::TEXT_MAX) {
             return "text is at most 27 characters";
         }
-        const char* gif = doc["gif"].is<const char*>() ? doc["gif"].as<const char*>() : "";
+        const char* gif = doc[F("gif")].is<const char*>() ? doc[F("gif")].as<const char*>() : "";
         if (*gif != '\0' && !Presence::validGifName(gif)) {
             return "gif must be a plain file name";
         }
@@ -230,23 +234,23 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         detail::copyText(record.title, text);
         detail::copyText(record.body, gif);
     } else {
-        const char* title = doc["title"].is<const char*>() ? doc["title"].as<const char*>() : "";
+        const char* title = doc[F("title")].is<const char*>() ? doc[F("title")].as<const char*>() : "";
         if (*title == '\0') {
             return "title is required";
         }
         detail::copyText(record.title, title);
-        detail::copyText(record.body, doc["body"].is<const char*>() ? doc["body"].as<const char*>() : "");
-        detail::copyText(record.value, doc["value"].is<const char*>() ? doc["value"].as<const char*>() : "");
+        detail::copyText(record.body, doc[F("body")].is<const char*>() ? doc[F("body")].as<const char*>() : "");
+        detail::copyText(record.value, doc[F("value")].is<const char*>() ? doc[F("value")].as<const char*>() : "");
 
         uint8_t kind = static_cast<uint8_t>(Attention::K_INFO);
-        if (doc["kind"].is<const char*>() && !detail::kindFromName(doc["kind"].as<const char*>(), kind)) {
+        if (doc[F("kind")].is<const char*>() && !detail::kindFromName(doc[F("kind")].as<const char*>(), kind)) {
             return "unknown kind";
         }
         record.kind = kind;
 
-        const char* icon = doc["icon"].is<const char*>() ? doc["icon"].as<const char*>() : "";
-        if (*icon == '\0' && doc["type"].is<const char*>()) {
-            icon = doc["type"].as<const char*>();  // "type" is an alias of "icon", as for push cards
+        const char* icon = doc[F("icon")].is<const char*>() ? doc[F("icon")].as<const char*>() : "";
+        if (*icon == '\0' && doc[F("type")].is<const char*>()) {
+            icon = doc[F("type")].as<const char*>();  // "type" is an alias of "icon", as for push cards
         }
         record.icon = static_cast<uint8_t>(Attention::iconFrom(icon));
         if (*icon != '\0' && record.icon == Attention::ICON_NONE) {
@@ -254,8 +258,8 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         }
 
         record.display = static_cast<uint8_t>(kind == Attention::K_PROGRESS ? Attention::SHOW_QUEUE : Attention::SHOW_INTERRUPT);
-        if (doc["display"].is<const char*>()) {
-            const char* display = doc["display"].as<const char*>();
+        if (doc[F("display")].is<const char*>()) {
+            const char* display = doc[F("display")].as<const char*>();
             if (strcmp(display, "queue") == 0) {
                 record.display = static_cast<uint8_t>(Attention::SHOW_QUEUE);
             } else if (strcmp(display, "interrupt") == 0) {
@@ -265,24 +269,24 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
             }
         }
 
-        if (!doc["ttl_s"].isNull()) {
-            const double ttl = doc["ttl_s"].as<double>();
-            if (!doc["ttl_s"].is<double>() || ttl < 0 || ttl > static_cast<double>(MAX_TTL_S)) {
+        if (!doc[F("ttl_s")].isNull()) {
+            const double ttl = doc[F("ttl_s")].as<double>();
+            if (!doc[F("ttl_s")].is<double>() || ttl < 0 || ttl > static_cast<double>(MAX_TTL_S)) {
                 return "ttl_s must be 0-86400";
             }
             record.ttlS = static_cast<uint16_t>(ttl);
         }
     }
-    if (!doc["enabled"].isNull()) {
-        if (!doc["enabled"].is<bool>()) {
+    if (!doc[F("enabled")].isNull()) {
+        if (!doc[F("enabled")].is<bool>()) {
             return "enabled must be true or false";
         }
-        record.flags = static_cast<uint8_t>((record.flags & ~FLAG_ENABLED) | (doc["enabled"].as<bool>() ? FLAG_ENABLED : 0));
+        record.flags = static_cast<uint8_t>((record.flags & ~FLAG_ENABLED) | (doc[F("enabled")].as<bool>() ? FLAG_ENABLED : 0));
     }
 
     // When: either one absolute instant, or a repeat rule with a local time of day
     const bool hasAt = !doc["at"].isNull();
-    const bool hasRepeat = !doc["repeat"].isNull();
+    const bool hasRepeat = !doc[F("repeat")].isNull();
     if (hasAt == hasRepeat) {
         return "give either \"at\" (one-off) or \"repeat\" with \"time\" (recurring)";
     }
@@ -293,7 +297,7 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         }
         record.at = static_cast<uint32_t>(instant);
     } else {
-        const char* repeat = doc["repeat"].is<const char*>() ? doc["repeat"].as<const char*>() : "";
+        const char* repeat = doc[F("repeat")].is<const char*>() ? doc[F("repeat")].as<const char*>() : "";
         if (strcmp(repeat, "daily") == 0) {
             record.repeat = static_cast<uint8_t>(Schedule::Repeat::Daily);
         } else if (strcmp(repeat, "weekly") == 0) {
@@ -303,11 +307,11 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
         } else {
             return "repeat must be daily, weekly or monthly";
         }
-        if (!detail::minuteOfDayFrom(doc["time"].is<const char*>() ? doc["time"].as<const char*>() : nullptr, record.minuteOfDay)) {
+        if (!detail::minuteOfDayFrom(doc[F("time")].is<const char*>() ? doc[F("time")].as<const char*>() : nullptr, record.minuteOfDay)) {
             return "time must be local HH:MM";
         }
         if (record.repeat == static_cast<uint8_t>(Schedule::Repeat::Weekly)) {
-            JsonArrayConst days = doc["days"].as<JsonArrayConst>();
+            JsonArrayConst days = doc[F("days")].as<JsonArrayConst>();
             if (days.isNull() || days.size() == 0) {
                 return "weekly needs days, for example [\"mon\",\"wed\"]";
             }
@@ -321,21 +325,21 @@ inline auto fromJson(JsonVariantConst doc, Record& out) -> const char* {
             }
         }
         if (record.repeat == static_cast<uint8_t>(Schedule::Repeat::Monthly)) {
-            const int day = doc["day"].is<int>() ? doc["day"].as<int>() : 0;
+            const int day = doc[F("day")].is<int>() ? doc[F("day")].as<int>() : 0;
             if (day < 1 || day > MAX_DAY_OF_MONTH) {
                 return "monthly needs day 1-31";
             }
             record.dayOfMonth = static_cast<uint8_t>(day);
         }
         time_t bound = 0;
-        if (!doc["from"].isNull()) {
-            if (!detail::instantFrom(doc["from"], bound)) {
+        if (!doc[F("from")].isNull()) {
+            if (!detail::instantFrom(doc[F("from")], bound)) {
                 return "from must be epoch seconds or ISO 8601 with an offset";
             }
             record.from = static_cast<uint32_t>(bound);
         }
-        if (!doc["until"].isNull()) {
-            if (!detail::instantFrom(doc["until"], bound)) {
+        if (!doc[F("until")].isNull()) {
+            if (!detail::instantFrom(doc[F("until")], bound)) {
                 return "until must be epoch seconds or ISO 8601 with an offset";
             }
             record.until = static_cast<uint32_t>(bound);
@@ -354,64 +358,64 @@ inline void writeWhen(const Record& record, JsonDocument& doc, size_t index) {
         doc[index]["at"] = record.at;
     } else {
         static const char* const NAMES[] = {"", "daily", "weekly", "monthly"};  // NOLINT(modernize-avoid-c-arrays)
-        doc[index]["repeat"] = NAMES[record.repeat];                              // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
+        doc[index][F("repeat")] = NAMES[record.repeat];                              // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
         char clock[12];                                                           // NOLINT(modernize-avoid-c-arrays)
         snprintf(clock, sizeof(clock), "%02d:%02d", record.minuteOfDay / Schedule::MINUTES_PER_HOUR,
                  record.minuteOfDay % Schedule::MINUTES_PER_HOUR);
-        doc[index]["time"] = clock;
+        doc[index][F("time")] = clock;
         if (repeat == Schedule::Repeat::Weekly) {
             size_t slot = 0;
             for (int day = 0; day <= static_cast<int>(MAX_WEEKDAY); day++) {
                 if ((record.weekdayMask & (1U << static_cast<unsigned>(day))) != 0) {
-                    doc[index]["days"][slot++] = detail::WEEKDAY_NAMES[day];  // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
+                    doc[index][F("days")][slot++] = detail::WEEKDAY_NAMES[day];  // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
                 }
             }
         }
         if (repeat == Schedule::Repeat::Monthly) {
-            doc[index]["day"] = record.dayOfMonth;
+            doc[index][F("day")] = record.dayOfMonth;
         }
         if (record.from != 0) {
-            doc[index]["from"] = record.from;
+            doc[index][F("from")] = record.from;
         }
         if (record.until != 0) {
-            doc[index]["until"] = record.until;
+            doc[index][F("until")] = record.until;
         }
     }
-    doc[index]["last_fired"] = record.lastFired;
+    doc[index][F("last_fired")] = record.lastFired;
 }
 
 /** @brief The stored fields (not the computed next firing time, which needs the clock). */
 inline void toJson(const Record& record, JsonDocument& doc, size_t index) {
     doc[index]["id"] = record.id;
     if (isModeChange(record)) {
-        doc[index]["mode"] = Presence::modeName(static_cast<Presence::Mode>(record.kind));
+        doc[index][F("mode")] = Presence::modeName(static_cast<Presence::Mode>(record.kind));
         if (record.title[0] != '\0') {
-            doc[index]["text"] = record.title;
+            doc[index][F("text")] = record.title;
         }
         if (record.body[0] != '\0') {
-            doc[index]["gif"] = record.body;
+            doc[index][F("gif")] = record.body;
         }
-        doc[index]["enabled"] = enabled(record);
+        doc[index][F("enabled")] = enabled(record);
         writeWhen(record, doc, index);
 
         return;
     }
-    doc[index]["title"] = record.title;
+    doc[index][F("title")] = record.title;
     if (record.body[0] != '\0') {
-        doc[index]["body"] = record.body;
+        doc[index][F("body")] = record.body;
     }
     if (record.value[0] != '\0') {
-        doc[index]["value"] = record.value;
+        doc[index][F("value")] = record.value;
     }
-    doc[index]["kind"] = Attention::kindName(static_cast<Attention::Kind>(record.kind));
+    doc[index][F("kind")] = Attention::kindName(static_cast<Attention::Kind>(record.kind));
     if (record.icon != Attention::ICON_NONE) {
-        doc[index]["icon"] = Attention::iconName(static_cast<Attention::Icon>(record.icon));
+        doc[index][F("icon")] = Attention::iconName(static_cast<Attention::Icon>(record.icon));
     }
-    doc[index]["display"] = record.display == Attention::SHOW_QUEUE ? "queue" : "interrupt";
+    doc[index][F("display")] = record.display == Attention::SHOW_QUEUE ? "queue" : "interrupt";
     if (record.ttlS != TTL_DEFAULT) {
-        doc[index]["ttl_s"] = record.ttlS;
+        doc[index][F("ttl_s")] = record.ttlS;
     }
-    doc[index]["enabled"] = enabled(record);
+    doc[index][F("enabled")] = enabled(record);
 
     writeWhen(record, doc, index);
 }

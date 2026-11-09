@@ -39,6 +39,14 @@ struct UiSettings {
     std::string weatherName = "London"; ///< label only (shown by the API and the web UI)
     bool useFahrenheit = false;
 
+    // Night (see ui/night_core.h): when it starts, what the cube does, and how bright the face is
+    std::string nightMode = "disabled";   ///< "disabled", "sunset", "schedule" or "manual"
+    std::string nightStyle = "face";      ///< "face" (dim night clock, notifications still shown) or "off" (screen off)
+    uint16_t nightStart = 1320;           ///< minutes after midnight (22:00): schedule start, and the fallback for sunset
+    uint16_t nightEnd = 420;              ///< 07:00
+    uint8_t nightBrightness = 10;         ///< backlight % of the night face
+    bool nightManual = false;             ///< the state in "manual" mode (saved)
+
     bool showStatus = false;           ///< vendor status badges (not ported; kept for glimmer's screens)
     bool tlsVerify = true;             ///< validate server certificates (about 3 s per connection on this chip)
 

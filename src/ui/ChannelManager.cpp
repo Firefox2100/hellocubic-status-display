@@ -19,10 +19,14 @@
 #include "display/CgfPlayer.h"
 #include "display/DisplayManager.h"
 #include "system/Diagnostics.h"
+#include "ui/Night.h"
 #include "ui/Presence.h"
 #include "weather.h"
 
 // Channels implemented in src/glimmer/ch_*.cpp
+extern auto chNightEnabled(const ChannelCtx& ctx) -> bool;
+extern void chNightDraw(const ChannelCtx& ctx);
+extern void chNightTick(const ChannelCtx& ctx);
 extern auto chHomeEnabled(const ChannelCtx& ctx) -> bool;
 extern void chHomeDraw(const ChannelCtx& ctx);
 extern void chHomeTick(const ChannelCtx& ctx);
@@ -74,7 +78,7 @@ constexpr long REASONABLE_EPOCH = 1000000000L;
 constexpr uint32_t GIF_DECODER_BYTES = sizeof(AnimatedGIF);
 constexpr uint32_t GIF_HEAP_HEADROOM = 4096;
 constexpr int MAX_REDRAW_ATTEMPTS = 4;
-constexpr size_t MAX_CHANNELS = 13;
+constexpr size_t MAX_CHANNELS = 14;
 
 UiSettings g_settings;
 bool g_apMode = false;
@@ -180,7 +184,8 @@ void chGifTick([[maybe_unused]] const ChannelCtx& ctx) {
 
 // ── Channel table ───────────────────────────────────────────────────────────
 
-const std::array<Channel, 12> kChannels = {{
+const std::array<Channel, 13> kChannels = {{
+    {"Night", chNightEnabled, chNightDraw, chNightTick},
     {"Busy", presenceEnabledBusy, presenceBusyDraw, nullptr},
     {"Away", presenceEnabledAway, presenceAwayDraw, nullptr},
     {"Attention", chAttentionEnabled, chAttentionDraw, chAttentionTick},
@@ -228,7 +233,9 @@ void recomputeActive() {
         const char* chName = kChannels.at(i).name;
         bool allowed = true;
         if (!sameName(chName, "Attention")) {
-            if (presence == Presence::Mode::Normal) {
+            if (Night::active()) {
+                allowed = sameName(chName, "Night");  // the night face alone; cards still come through "Attention"
+            } else if (presence == Presence::Mode::Normal) {
                 allowed = true;
             } else if (presence == Presence::Mode::Relaxing) {
                 // the GIF, or the clock when the GIF cannot run (low heap, missing file)
@@ -422,7 +429,8 @@ auto mainNextFetchInMs() -> uint32_t {
 
     return age < every ? every - age : 0;
 }
-auto mainNightFace() -> bool { return false; }  // night face: not implemented yet
+auto mainNightFace() -> bool { return Night::active(); }
+auto mainNightDark() -> bool { return Night::dark(); }
 auto mainPinApprovals() -> bool { return g_settings.pinApprovals; }
 auto mainAgentNightShow() -> bool { return g_settings.agentNightShow; }
 auto mainApprovalTtlS() -> uint32_t { return static_cast<uint32_t>(g_settings.approvalTtlMin) * SECONDS_PER_MINUTE; }
@@ -433,7 +441,7 @@ void ChannelManager::begin(bool apMode) {
     g_started = true;
     g_gifAllowed = !Diagnostics::lastResetWasCrash();
     if (!g_gifAllowed) {
-        Logger::warn("Previous reset was a crash: idle GIFs disabled until next clean boot", LOG_TAG);
+        Logger::warn(F("Previous reset was a crash: idle GIFs disabled until next clean boot"), LOG_TAG);
     }
     g_activeCount = 0;
     g_bootHold = !apMode;
@@ -500,6 +508,20 @@ void ChannelManager::update() {
         g_manualGif = "";
         g_gifBlockedUntil = 0;
         refreshScreen(true);
+    }
+    // Night: the face (or a dark screen) takes over; the backlight follows at once, the screen when no card holds it
+    Night::update();
+    static uint32_t seenNightRevision = 0;
+    if (Night::revision() != seenNightRevision && !g_wasAttention) {
+        seenNightRevision = Night::revision();
+        g_manualGif = "";
+        g_gifBlockedUntil = 0;
+        refreshScreen(true);
+    }
+    static int lastBacklight = -1;
+    if (Night::backlightPct() != lastBacklight) {
+        lastBacklight = Night::backlightPct();
+        DisplayManager::setBacklight(static_cast<uint8_t>(lastBacklight));
     }
     // Home replaces the clock while the weather is fresh, and the clock comes back when it is not
     static bool seenHome = false;

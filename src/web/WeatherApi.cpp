@@ -48,29 +48,29 @@ void addTemp(JsonObject target, const char* key, float celsius) {
 }
 
 void describeFetch(JsonObject fetch, const UiSettings& settings, const WeatherData& data) {
-    fetch["state"] = fetchState(settings, data);
-    fetch["source"] = !data.valid ? "none" : (Weather::liveThisBoot() ? "live" : "cache");
-    fetch["age_s"] = ageSeconds(data.lastOk);
-    fetch["stale"] = Weather::isStale(settings);
-    fetch["fails"] = Weather::policy().fails;
-    fetch["last_http"] = Weather::policy().lastCode;
-    fetch["error"] = data.err;
-    fetch["attempts_since_boot"] = Weather::attempts();
-    fetch["interval_min"] = Weather::intervalMin(settings);
-    fetch["next_fetch_in_s"] = Weather::nextFetchInS();
+    fetch[F("state")] = fetchState(settings, data);
+    fetch[F("source")] = !data.valid ? "none" : (Weather::liveThisBoot() ? "live" : "cache");
+    fetch[F("age_s")] = ageSeconds(data.lastOk);
+    fetch[F("stale")] = Weather::isStale(settings);
+    fetch[F("fails")] = Weather::policy().fails;
+    fetch[F("last_http")] = Weather::policy().lastCode;
+    fetch[F("error")] = data.err;
+    fetch[F("attempts_since_boot")] = Weather::attempts();
+    fetch[F("interval_min")] = Weather::intervalMin(settings);
+    fetch[F("next_fetch_in_s")] = Weather::nextFetchInS();
 }
 
 void describeCurrent(JsonObject current, const WeatherData& data) {
     addTemp(current, "temp_c", data.tempC);
     addTemp(current, "feels_c", data.feelsC);
-    current["code"] = data.code;
-    current["condition"] = Weather::describe(data.code);
-    current["is_day"] = data.isDay;
+    current[F("code")] = data.code;
+    current[F("condition")] = Weather::describe(data.code);
+    current[F("is_day")] = data.isDay;
     if (data.humidity >= 0) {
-        current["humidity_pct"] = data.humidity;
+        current[F("humidity_pct")] = data.humidity;
     }
     if (data.windKmh >= 0) {
-        current["wind_kmh"] = data.windKmh;
+        current[F("wind_kmh")] = data.windKmh;
     }
 }
 
@@ -78,14 +78,14 @@ void describeCurrent(JsonObject current, const WeatherData& data) {
 void describeShown(JsonObject shown, const UiSettings& settings, const WeatherData& data) {
     std::array<char, TEXT_SIZE> text{};
     snprintf(text.data(), text.size(), "%.0f", Weather::toDisplay(data.tempC, settings.useFahrenheit));
-    shown["temp"] = text.data();
+    shown[F("temp")] = text.data();
     const float feels = data.feelsC > NO_VALUE ? data.feelsC : data.tempC;
     snprintf(text.data(), text.size(), "%.0f", Weather::toDisplay(feels, settings.useFahrenheit));
-    shown["feels"] = text.data();
-    shown["unit"] = settings.useFahrenheit ? "F" : "C";
-    shown["condition"] = Weather::describe(data.code);
+    shown[F("feels")] = text.data();
+    shown[F("unit")] = settings.useFahrenheit ? "F" : "C";
+    shown[F("condition")] = Weather::describe(data.code);
     Weather::rainHint(settings, text.data(), text.size());
-    shown["rain_hint"] = text.data();
+    shown[F("rain_hint")] = text.data();
 }
 
 void describeForecast(JsonArray forecast, const WeatherData& data) {
@@ -93,13 +93,13 @@ void describeForecast(JsonArray forecast, const WeatherData& data) {
         JsonObject entry = forecast.add<JsonObject>();
         addTemp(entry, "min_c", day.tmin);
         addTemp(entry, "max_c", day.tmax);
-        entry["code"] = day.code;
-        entry["condition"] = Weather::describe(day.code);
+        entry[F("code")] = day.code;
+        entry[F("condition")] = Weather::describe(day.code);
         if (day.uvMax >= 0) {
-            entry["uv_max"] = day.uvMax;
+            entry[F("uv_max")] = day.uvMax;
         }
-        entry["sunrise"] = static_cast<uint32_t>(day.sunrise);
-        entry["sunset"] = static_cast<uint32_t>(day.sunset);
+        entry[F("sunrise")] = static_cast<uint32_t>(day.sunrise);
+        entry[F("sunset")] = static_cast<uint32_t>(day.sunset);
     }
 }
 
@@ -111,22 +111,22 @@ void handleGet(Webserver* webserver) {
     const WeatherData& data = Weather::snapshot();
 
     JsonDocument doc;
-    doc["enabled"] = settings.showWeather;
-    doc["configured"] = Weather::configured(settings);
-    JsonObject place = doc["location"].to<JsonObject>();
-    place["name"] = settings.weatherName.c_str();
-    place["lat"] = settings.weatherLat;
-    place["lon"] = settings.weatherLon;
-    doc["units"] = settings.useFahrenheit ? "F" : "C";
-    doc["home_active"] = Weather::homeActive(settings);
-    doc["active_channel"] = ChannelManager::activeName();
-    describeFetch(doc["fetch"].to<JsonObject>(), settings, data);
+    doc[F("enabled")] = settings.showWeather;
+    doc[F("configured")] = Weather::configured(settings);
+    JsonObject place = doc[F("location")].to<JsonObject>();
+    place[F("name")] = settings.weatherName.c_str();
+    place[F("lat")] = settings.weatherLat;
+    place[F("lon")] = settings.weatherLon;
+    doc[F("units")] = settings.useFahrenheit ? "F" : "C";
+    doc[F("home_active")] = Weather::homeActive(settings);
+    doc[F("active_channel")] = ChannelManager::activeName();
+    describeFetch(doc[F("fetch")].to<JsonObject>(), settings, data);
     if (data.valid) {
-        describeCurrent(doc["current"].to<JsonObject>(), data);
-        describeShown(doc["shown"].to<JsonObject>(), settings, data);
-        describeForecast(doc["forecast"].to<JsonArray>(), data);
-        doc["rain_start"] = static_cast<uint32_t>(data.rainStart);
-        JsonArray rain = doc["rain_pct_next_12h"].to<JsonArray>();
+        describeCurrent(doc[F("current")].to<JsonObject>(), data);
+        describeShown(doc[F("shown")].to<JsonObject>(), settings, data);
+        describeForecast(doc[F("forecast")].to<JsonArray>(), data);
+        doc[F("rain_start")] = static_cast<uint32_t>(data.rainStart);
+        JsonArray rain = doc[F("rain_pct_next_12h")].to<JsonArray>();
         for (const uint8_t pct : data.rainPct) {
             if (pct == UNKNOWN_PCT) {
                 rain.add(nullptr);
@@ -144,7 +144,7 @@ void handleRefresh(Webserver* webserver) {
     }
     Weather::refreshSoon();
     JsonDocument doc;
-    doc["status"] = "scheduled";
+    doc[F("status")] = "scheduled";
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 }  // namespace

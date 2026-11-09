@@ -7,6 +7,8 @@ function screensHandler() {
     query: "",
     results: [],
     weatherInfo: "",
+    night: { mode: "disabled", style: "face", start: "22:00", end: "07:00", brightness: 10 },
+    nightInfo: "",
 
     async init() {
       try {
@@ -16,6 +18,7 @@ function screensHandler() {
         const g = await (await apiFetch("/api/v1/gif")).json();
         this.gifs = (g.files || []).map((f) => f.name);
         await this.loadWeather();
+        await this.loadNight();
       } catch (e) {
         this.statusMsg = "Could not load (is the API token saved?)";
       }
@@ -44,6 +47,27 @@ function screensHandler() {
         body[k] = u[k];
       }
       return this.post("/api/v1/ui", body);
+    },
+
+    async loadNight() {
+      try {
+        const n = await (await apiFetch("/api/v1/night")).json();
+        this.night = { mode: n.mode, style: n.style, start: n.start, end: n.end, brightness: n.brightness };
+        this.nightInfo = `now: ${n.active ? (n.screen_off ? "night, screen off" : "night face") : "day"}` +
+          ` (${n.reason}${n.override !== "none" ? ", switched " + n.override + " by hand" : ""})`;
+      } catch (e) {
+        this.nightInfo = "";
+      }
+    },
+
+    async saveNight() {
+      await this.post("/api/v1/night", this.night);
+      await this.loadNight();
+    },
+
+    async nightSwitch(action) {
+      await this.post("/api/v1/night", { switch: action });
+      await this.loadNight();
     },
 
     async loadWeather() {

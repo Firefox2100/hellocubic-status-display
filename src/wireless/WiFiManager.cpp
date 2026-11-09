@@ -134,7 +134,7 @@ auto WiFiManager::connectToNetwork(const char* ssid, const char* pass, uint32_t 
         return true;
     }
 
-    Logger::warn("Failed to connect to WiFi", "WiFiManager");
+    Logger::warn(F("Failed to connect to WiFi"), "WiFiManager");
 
     startAccessPointMode();
     BootScreen::showSetup(_apSsid, _apPass, ssid);
@@ -154,7 +154,7 @@ void WiFiManager::loop() {
             WiFi.mode(WIFI_STA);
             _apMode = false;
             _retrying = false;
-            Logger::warn("Saved Wi-Fi is back: left setup mode", "WiFiManager");
+            Logger::warn(F("Saved Wi-Fi is back: left setup mode"), "WiFiManager");
 
             return;
         }

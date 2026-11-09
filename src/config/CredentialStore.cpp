@@ -36,7 +36,7 @@ auto load(JsonDocument& doc) -> bool {
     const DeserializationError err = deserializeJson(doc, reinterpret_cast<const char*>(buf));
     delete[] buf;
     if (err) {
-        Logger::warn("Credential file unreadable (device key changed?), ignoring it", LOG_TAG);
+        Logger::warn(F("Credential file unreadable (device key changed?), ignoring it"), LOG_TAG);
         doc.clear();
     }
 

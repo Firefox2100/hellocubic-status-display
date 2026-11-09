@@ -208,15 +208,15 @@ auto fetchClaudeOrg(const String& key, bool verify) -> TlsFetch::Result {
         "https://claude.ai/api/organizations", [&key](HTTPClient& http) { claudeHeaders(http, key); },
         [&orgId](Stream& body) {
             JsonDocument filter;
-            filter[0]["uuid"] = true;
+            filter[0][F("uuid")] = true;
             JsonDocument doc;
             if (deserializeJson(doc, body, DeserializationOption::Filter(filter)) != DeserializationError::Ok) {
                 return false;
             }
-            if (!doc[0]["uuid"].is<const char*>()) {
+            if (!doc[0][F("uuid")].is<const char*>()) {
                 return false;
             }
-            orgId = doc[0]["uuid"].as<String>();
+            orgId = doc[0][F("uuid")].as<String>();
 
             return !orgId.isEmpty();
         },
@@ -464,7 +464,7 @@ void loadCache() {
     const bool complete = file.size() == buffer.size() && file.read(buffer.data(), buffer.size()) == buffer.size();
     file.close();
     if (!complete || !UsageCacheFormat::decode(buffer.data(), buffer.size(), g_claude, g_codex)) {
-        Logger::warn("Usage cache ignored (damaged or from another build)", LOG_TAG);
+        Logger::warn(F("Usage cache ignored (damaged or from another build)"), LOG_TAG);
     }
 }
 
@@ -674,10 +674,10 @@ auto secondsUntil(time_t when) -> long {
 }
 
 void fillGrant(JsonDocument& doc, const char* source, const ResetGrant& grant) {
-    doc[source]["reset_credits"]["left"] = grant.left;
-    doc[source]["reset_credits"]["usable"] = grant.usable;
-    doc[source]["reset_credits"]["title"] = grant.title;
-    doc[source]["reset_credits"]["ends_in_s"] = secondsUntil(grant.endsAt);
+    doc[source][F("reset_credits")][F("left")] = grant.left;
+    doc[source][F("reset_credits")][F("usable")] = grant.usable;
+    doc[source][F("reset_credits")][F("title")] = grant.title;
+    doc[source][F("reset_credits")][F("ends_in_s")] = secondsUntil(grant.endsAt);
 }
 }  // namespace
 
@@ -686,58 +686,58 @@ void UsageManager::fillStatus(JsonDocument& doc) {
     const uint32_t now = millis();
     static const std::array<const char*, JOB_COUNT> JOB_NAMES = {"claude", "codex", "codex_resets"};
 
-    doc["tls_verify"] = settings.tlsVerify;
-    doc["refresh_min"] = settings.refreshMin;
-    doc["heap_refusals"] = g_heapRefusals;
-    doc["time_synced"] = timeSynced();
+    doc[F("tls_verify")] = settings.tlsVerify;
+    doc[F("refresh_min")] = settings.refreshMin;
+    doc[F("heap_refusals")] = g_heapRefusals;
+    doc[F("time_synced")] = timeSynced();
     for (size_t i = 0; i < g_jobs.size(); i++) {
         const JobState& job = g_jobs.at(i);
-        doc["next_fetch_in_s"][JOB_NAMES.at(i)] =
+        doc[F("next_fetch_in_s")][JOB_NAMES.at(i)] =
             job.primed ? static_cast<int32_t>(job.dueMs - now) / static_cast<int32_t>(MS_PER_SECOND) : -1;
     }
 
     // Claude
-    doc["claude"]["fetch"] = fetchState(settings.claudeConfigured, settings.showClaude, g_claude.cred, g_claudeLatch);
-    doc["claude"]["stopped_reason"] = g_claudeLatch.reason;
-    doc["claude"]["cred"] = credName(g_claude.cred);
-    doc["claude"]["source"] = !g_claude.valid ? "none" : (g_claudeLive ? "live" : "cache");
-    doc["claude"]["valid"] = g_claude.valid;
-    doc["claude"]["age_s"] = ageSeconds(g_claude.lastOk);
-    doc["claude"]["last_http"] = g_lastClaudeHttp;
-    doc["claude"]["fails"] = g_claudePolicy.fails;
-    doc["claude"]["error"] = g_claude.err;
-    doc["claude"]["session"]["pct_left"] = g_claude.sessionPct;
-    doc["claude"]["session"]["resets_in_s"] = secondsUntil(g_claude.sessionReset);
-    doc["claude"]["weekly"]["pct_left"] = g_claude.weeklyPct;
-    doc["claude"]["weekly"]["resets_in_s"] = secondsUntil(g_claude.weeklyReset);
+    doc[F("claude")][F("fetch")] = fetchState(settings.claudeConfigured, settings.showClaude, g_claude.cred, g_claudeLatch);
+    doc[F("claude")][F("stopped_reason")] = g_claudeLatch.reason;
+    doc[F("claude")][F("cred")] = credName(g_claude.cred);
+    doc[F("claude")][F("source")] = !g_claude.valid ? "none" : (g_claudeLive ? "live" : "cache");
+    doc[F("claude")][F("valid")] = g_claude.valid;
+    doc[F("claude")][F("age_s")] = ageSeconds(g_claude.lastOk);
+    doc[F("claude")][F("last_http")] = g_lastClaudeHttp;
+    doc[F("claude")][F("fails")] = g_claudePolicy.fails;
+    doc[F("claude")][F("error")] = g_claude.err;
+    doc[F("claude")][F("session")][F("pct_left")] = g_claude.sessionPct;
+    doc[F("claude")][F("session")][F("resets_in_s")] = secondsUntil(g_claude.sessionReset);
+    doc[F("claude")][F("weekly")][F("pct_left")] = g_claude.weeklyPct;
+    doc[F("claude")][F("weekly")][F("resets_in_s")] = secondsUntil(g_claude.weeklyReset);
     size_t slot = 0;
     for (const ModelSlot& model : g_claude.models) {
         if (model.pct >= 0) {
-            doc["claude"]["models"][slot]["label"] = model.label;
-            doc["claude"]["models"][slot]["pct_left"] = model.pct;
+            doc[F("claude")][F("models")][slot][F("label")] = model.label;
+            doc[F("claude")][F("models")][slot][F("pct_left")] = model.pct;
             slot++;
         }
     }
     fillGrant(doc, "claude", g_claude.resets);
 
     // Codex
-    doc["codex"]["fetch"] = fetchState(settings.codexConfigured, settings.showCodex, g_codex.cred, g_codexLatch);
-    doc["codex"]["stopped_reason"] = g_codexLatch.reason;
-    doc["codex"]["cred"] = credName(g_codex.cred);
-    doc["codex"]["source"] = !g_codex.valid ? "none" : (g_codexLive ? "live" : "cache");
-    doc["codex"]["valid"] = g_codex.valid;
-    doc["codex"]["age_s"] = ageSeconds(g_codex.lastOk);
-    doc["codex"]["last_http"] = g_lastCodexHttp;
-    doc["codex"]["fails"] = g_codexPolicy.fails;
-    doc["codex"]["error"] = g_codex.err;
-    doc["codex"]["token_expires_in_s"] = secondsUntil(g_codex.jwtExp);
-    doc["codex"]["primary"]["pct_left"] = g_codex.primaryPct;
-    doc["codex"]["primary"]["resets_in_s"] = secondsUntil(g_codex.primaryReset);
-    doc["codex"]["primary"]["window_s"] = g_codex.primaryWinSec;
-    doc["codex"]["secondary"]["pct_left"] = g_codex.secondaryPct;
-    doc["codex"]["secondary"]["resets_in_s"] = secondsUntil(g_codex.secondaryReset);
-    doc["codex"]["secondary"]["window_s"] = g_codex.secondaryWinSec;
-    doc["codex"]["secondary"]["tag"] = g_codex.secondaryTag;
-    doc["codex"]["credits_remaining"] = g_codex.creditsRemain;
+    doc[F("codex")][F("fetch")] = fetchState(settings.codexConfigured, settings.showCodex, g_codex.cred, g_codexLatch);
+    doc[F("codex")][F("stopped_reason")] = g_codexLatch.reason;
+    doc[F("codex")][F("cred")] = credName(g_codex.cred);
+    doc[F("codex")][F("source")] = !g_codex.valid ? "none" : (g_codexLive ? "live" : "cache");
+    doc[F("codex")][F("valid")] = g_codex.valid;
+    doc[F("codex")][F("age_s")] = ageSeconds(g_codex.lastOk);
+    doc[F("codex")][F("last_http")] = g_lastCodexHttp;
+    doc[F("codex")][F("fails")] = g_codexPolicy.fails;
+    doc[F("codex")][F("error")] = g_codex.err;
+    doc[F("codex")][F("token_expires_in_s")] = secondsUntil(g_codex.jwtExp);
+    doc[F("codex")][F("primary")][F("pct_left")] = g_codex.primaryPct;
+    doc[F("codex")][F("primary")][F("resets_in_s")] = secondsUntil(g_codex.primaryReset);
+    doc[F("codex")][F("primary")][F("window_s")] = g_codex.primaryWinSec;
+    doc[F("codex")][F("secondary")][F("pct_left")] = g_codex.secondaryPct;
+    doc[F("codex")][F("secondary")][F("resets_in_s")] = secondsUntil(g_codex.secondaryReset);
+    doc[F("codex")][F("secondary")][F("window_s")] = g_codex.secondaryWinSec;
+    doc[F("codex")][F("secondary")][F("tag")] = g_codex.secondaryTag;
+    doc[F("codex")][F("credits_remaining")] = g_codex.creditsRemain;
     fillGrant(doc, "codex", g_codex.resets);
 }

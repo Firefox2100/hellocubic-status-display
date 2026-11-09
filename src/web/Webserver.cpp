@@ -256,7 +256,7 @@ void Webserver::registerGenericStaticFallback(  // NOLINT(readability-convert-me
 void Webserver::route(  // NOLINT(readability-convert-member-functions-to-static)
     const char* path, HTTPMethod method, void (*handler)(Webserver*)) {
     if (_routeCount >= _routes.size()) {
-        Logger::error("Route table full", "Webserver");
+        Logger::error(F("Route table full"), "Webserver");
 
         return;
     }

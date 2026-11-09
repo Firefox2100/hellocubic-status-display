@@ -218,6 +218,7 @@ void registerApiEndpoints(Webserver* webserver) {
     registerEventEndpoints(webserver);
     registerPresenceEndpoints(webserver);
     registerWeatherEndpoints(webserver);
+    registerNightEndpoints(webserver);
 
     // @openapi {get} /token/check version=v1 group=Authentication summary="Check bearer token validity"
     // requiresAuth=true responses=200:application/json,401:application/json
@@ -293,8 +294,8 @@ auto requireBearerToken(Webserver* webserver) -> bool {
     }
 
     JsonDocument doc;
-    doc["status"] = "error";
-    doc["message"] = "Invalid or missing token";
+    doc[F("status")] = "error";
+    doc[F("message")] = "Invalid or missing token";
 
     String json;
     serializeJson(doc, json);
@@ -319,8 +320,8 @@ void handleTokenCheck(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Token is valid";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "Token is valid";
 
     String json;
     serializeJson(doc, json);
@@ -342,8 +343,8 @@ void handleTokenSave(Webserver* webserver) {
 
     if (!webserver->raw().hasArg("plain") || webserver->raw().arg("plain").length() == 0) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Missing JSON body";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Missing JSON body";
 
         String json;
         serializeJson(doc, json);
@@ -360,8 +361,8 @@ void handleTokenSave(Webserver* webserver) {
 
     if (err) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Invalid JSON";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid JSON";
 
         String json;
         serializeJson(doc, json);
@@ -369,17 +370,17 @@ void handleTokenSave(Webserver* webserver) {
         setCorsHeaders(webserver);
         webserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
 
-        Logger::warn("Attempt to save API token with invalid JSON", "API");
+        Logger::warn(F("Attempt to save API token with invalid JSON"), "API");
 
         return;
     }
 
-    const char* newToken = ddoc["token"] | "";
+    const char* newToken = ddoc[F("token")] | "";
 
     if (strlen(newToken) == 0) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "token field is required";
+        doc[F("status")] = "error";
+        doc[F("message")] = "token field is required";
 
         String json;
         serializeJson(doc, json);
@@ -388,7 +389,7 @@ void handleTokenSave(Webserver* webserver) {
 
         webserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
 
-        Logger::warn("Attempt to save empty API token", "API");
+        Logger::warn(F("Attempt to save empty API token"), "API");
         return;
     }
 
@@ -396,8 +397,8 @@ void handleTokenSave(Webserver* webserver) {
     configManager.save();
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Token saved successfully";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "Token saved successfully";
 
     String json;
     serializeJson(doc, json);
@@ -417,11 +418,11 @@ void handleOtaStatus(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    doc["inProgress"] = otaInProgress;
-    doc["bytesWritten"] = otaSize;
-    doc["totalBytes"] = otaTotal;
-    doc["error"] = otaError;
-    doc["message"] = otaStatus;
+    doc[F("inProgress")] = otaInProgress;
+    doc[F("bytesWritten")] = otaSize;
+    doc[F("totalBytes")] = otaTotal;
+    doc[F("error")] = otaError;
+    doc[F("message")] = otaStatus;
 
     String json;
     serializeJson(doc, json);
@@ -442,8 +443,8 @@ void handleOtaCancel(Webserver* webserver) {
     otaStatus = "Cancel requested";
 
     JsonDocument doc;
-    doc["status"] = "cancelling";
-    doc["message"] = "Cancel request received";
+    doc[F("status")] = "cancelling";
+    doc[F("message")] = "Cancel request received";
 
     String json;
     serializeJson(doc, json);
@@ -464,7 +465,7 @@ void handleListGifs(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    JsonArray files = doc["files"].to<JsonArray>();
+    JsonArray files = doc[F("files")].to<JsonArray>();
 
     size_t usedBytes = 0;
     size_t totalBytes = 0;
@@ -477,8 +478,8 @@ void handleListGifs(Webserver* webserver) {
             if (name.endsWith(".gif") || name.endsWith(".GIF") || name.endsWith(".cgf")) {
                 JsonObject fileObj = files.add<JsonObject>();
 
-                fileObj["name"] = name;            // NOLINT(readability-misplaced-array-index)
-                fileObj["size"] = dir.fileSize();  // NOLINT(readability-misplaced-array-index)
+                fileObj[F("name")] = name;            // NOLINT(readability-misplaced-array-index)
+                fileObj[F("size")] = dir.fileSize();  // NOLINT(readability-misplaced-array-index)
                 usedBytes += dir.fileSize();
             }
         }
@@ -491,9 +492,9 @@ void handleListGifs(Webserver* webserver) {
         }
     }
 
-    doc["usedBytes"] = usedBytes;
-    doc["totalBytes"] = totalBytes;
-    doc["freeBytes"] = totalBytes > usedBytes ? totalBytes - usedBytes : 0;
+    doc[F("usedBytes")] = usedBytes;
+    doc[F("totalBytes")] = totalBytes;
+    doc[F("freeBytes")] = totalBytes > usedBytes ? totalBytes - usedBytes : 0;
 
     String json;
     serializeJson(doc, json);
@@ -517,7 +518,7 @@ void handleGifUploadStart(const String& currentFilename, File& gifFile, bool& up
     if (!LittleFS.exists("/gif")) {
         Logger::info("/gif directory does not exist, creating...", "API::GIF");
         if (!LittleFS.mkdir("/gif")) {
-            Logger::error("Failed to create /gif directory!", "API::GIF");
+            Logger::error(F("Failed to create /gif directory!"), "API::GIF");
         }
     }
 
@@ -525,7 +526,7 @@ void handleGifUploadStart(const String& currentFilename, File& gifFile, bool& up
     if (!gifFile) {
         uploadError = true;
         Logger::error((String("Impossible to open file: ") + currentFilename).c_str(), "API::GIF");
-        Logger::error("GIF UPLOAD Failed to open file", "API::GIF");
+        Logger::error(F("GIF UPLOAD Failed to open file"), "API::GIF");
     } else {
         Logger::info("File opened successfully for writing.", "API::GIF");
     }
@@ -549,7 +550,7 @@ void handleGifUploadWrite(HTTPUpload& upload, File& gifFile, bool& uploadError) 
             size_t written = gifFile.write(upload.buf + total, toWrite);
 
             if (written == 0) {
-                Logger::error("Write returned 0 bytes!", "API::GIF");
+                Logger::error(F("Write returned 0 bytes!"), "API::GIF");
                 uploadError = true;
                 break;
             }
@@ -557,7 +558,7 @@ void handleGifUploadWrite(HTTPUpload& upload, File& gifFile, bool& uploadError) 
             total += written;
         }
     } else {
-        Logger::error("Cannot write, file not open or previous error", "API::GIF");
+        Logger::error(F("Cannot write, file not open or previous error"), "API::GIF");
     }
 }
 
@@ -585,12 +586,12 @@ void handleGifUploadEnd(const String& currentFilename, File& gifFile) {
  * @return void
  */
 void handleGifUploadAborted(const String& currentFilename, File& gifFile, bool& uploadError) {
-    Logger::warn("UPLOAD_FILE_ABORTED", "API::GIF");
+    Logger::warn(F("UPLOAD_FILE_ABORTED"), "API::GIF");
 
     if (gifFile) {
         gifFile.close();
 
-        Logger::warn("File closed after abort", "API::GIF");
+        Logger::warn(F("File closed after abort"), "API::GIF");
     }
 
     if (!currentFilename.isEmpty()) {
@@ -616,14 +617,14 @@ void sendGifUploadResult(Webserver* webserver, const String& currentFilename, bo
     JsonDocument doc;
 
     if (uploadError) {
-        doc["status"] = "error";
-        doc["message"] = "Error during GIF upload";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Error during GIF upload";
 
-        Logger::error("GIF UPLOAD Error during upload", "API::GIF");
+        Logger::error(F("GIF UPLOAD Error during upload"), "API::GIF");
     } else {
-        doc["status"] = "success";
-        doc["message"] = "GIF uploaded successfully";
-        doc["filename"] = currentFilename;
+        doc[F("status")] = "success";
+        doc[F("message")] = "GIF uploaded successfully";
+        doc[F("filename")] = currentFilename;
 
         Logger::info((String("Gif upload success, filename: ") + currentFilename).c_str(), "API::GIF");
     }
@@ -650,8 +651,8 @@ void handleGifUpload(Webserver* webserver) {
         uploadError = true;
         JsonDocument doc;
 
-        doc["status"] = "error";
-        doc["message"] = "Invalid or missing token";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid or missing token";
 
         String json;
         serializeJson(doc, json);
@@ -681,7 +682,7 @@ void handleGifUpload(Webserver* webserver) {
             handleGifUploadAborted(currentFilename, gifFile, uploadError);
             break;
         default:
-            Logger::warn("Unknown upload status.", "API::GIF");
+            Logger::warn(F("Unknown upload status."), "API::GIF");
             break;
     }
 
@@ -704,7 +705,7 @@ void handleReboot(Webserver* webserver) {
     JsonDocument doc;
     int constexpr rebootDelayMs = 1000;
 
-    doc["status"] = "rebooting";
+    doc[F("status")] = "rebooting";
     String json;
     serializeJson(doc, json);
 
@@ -726,8 +727,8 @@ void handleNtpSync(Webserver* webserver) {
     JsonDocument doc;
 
     if (ntpClient == nullptr) {
-        doc["status"] = "error";
-        doc["message"] = "NTP client not initialized";
+        doc[F("status")] = "error";
+        doc[F("message")] = "NTP client not initialized";
 
         String json;
         serializeJson(doc, json);
@@ -739,9 +740,9 @@ void handleNtpSync(Webserver* webserver) {
     }
 
     bool syncOk = ntpClient->syncNow();
-    doc["status"] = syncOk ? "ok" : "error";
-    doc["lastStatus"] = ntpClient->lastStatus();
-    doc["lastSyncTime"] = ntpClient->lastSyncTime();
+    doc[F("status")] = syncOk ? "ok" : "error";
+    doc[F("lastStatus")] = ntpClient->lastStatus();
+    doc[F("lastSyncTime")] = ntpClient->lastSyncTime();
 
     String json;
     serializeJson(doc, json);
@@ -761,8 +762,8 @@ void handleNtpStatus(Webserver* webserver) {
     JsonDocument doc;
 
     if (ntpClient == nullptr) {
-        doc["status"] = "error";
-        doc["message"] = "NTP client not initialized";
+        doc[F("status")] = "error";
+        doc[F("message")] = "NTP client not initialized";
 
         String json;
         serializeJson(doc, json);
@@ -772,9 +773,9 @@ void handleNtpStatus(Webserver* webserver) {
         return;
     }
 
-    doc["lastOk"] = ntpClient->lastSyncOk();
-    doc["lastStatus"] = ntpClient->lastStatus();
-    doc["lastSyncTime"] = ntpClient->lastSyncTime();
+    doc[F("lastOk")] = ntpClient->lastSyncOk();
+    doc[F("lastStatus")] = ntpClient->lastStatus();
+    doc[F("lastSyncTime")] = ntpClient->lastSyncTime();
 
     String json;
     serializeJson(doc, json);
@@ -792,7 +793,7 @@ void handleNtpConfigGet(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    doc["ntp_server"] = configManager.getNtpServer();
+    doc[F("ntp_server")] = configManager.getNtpServer();
 
     String json;
     serializeJson(doc, json);
@@ -811,8 +812,8 @@ void handleNtpConfigSet(Webserver* webserver) {
 
     if (!webserver->raw().hasArg("plain") || webserver->raw().arg("plain").length() == 0) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Missing JSON body";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Missing JSON body";
 
         String json;
 
@@ -829,8 +830,8 @@ void handleNtpConfigSet(Webserver* webserver) {
 
     if (err) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Invalid JSON";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid JSON";
 
         String json;
         serializeJson(doc, json);
@@ -841,12 +842,12 @@ void handleNtpConfigSet(Webserver* webserver) {
         return;
     }
 
-    const char* server = ddoc["ntp_server"] | "";
+    const char* server = ddoc[F("ntp_server")] | "";
 
     if (strlen(server) == 0) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "ntp_server missing";
+        doc[F("status")] = "error";
+        doc[F("message")] = "ntp_server missing";
 
         String json;
         serializeJson(doc, json);
@@ -861,8 +862,8 @@ void handleNtpConfigSet(Webserver* webserver) {
 
     if (!configManager.save()) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Failed to save config";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Failed to save config";
 
         String json;
 
@@ -880,8 +881,8 @@ void handleNtpConfigSet(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["ntp_server"] = server;
+    doc[F("status")] = "ok";
+    doc[F("ntp_server")] = server;
     String json;
     serializeJson(doc, json);
 
@@ -898,7 +899,7 @@ void handleDisplayRotationGet(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    doc["rotation"] = configManager.getLCDRotationSafe();
+    doc[F("rotation")] = configManager.getLCDRotationSafe();
 
     String json;
     serializeJson(doc, json);
@@ -917,8 +918,8 @@ void handleDisplayRotationSet(Webserver* webserver) {
 
     if (!webserver->raw().hasArg("plain") || webserver->raw().arg("plain").length() == 0) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Missing JSON body";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Missing JSON body";
 
         String json;
         serializeJson(doc, json);
@@ -933,10 +934,10 @@ void handleDisplayRotationSet(Webserver* webserver) {
     JsonDocument ddoc;
     DeserializationError err = deserializeJson(ddoc, body);
 
-    if (err || !ddoc["rotation"].is<int>()) {
+    if (err || !ddoc[F("rotation")].is<int>()) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Invalid JSON or missing rotation";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid JSON or missing rotation";
 
         String json;
         serializeJson(doc, json);
@@ -947,14 +948,14 @@ void handleDisplayRotationSet(Webserver* webserver) {
         return;
     }
 
-    int rotation = ddoc["rotation"].as<int>();
+    int rotation = ddoc[F("rotation")].as<int>();
     const int rotation_range_min = 0;
     const int rotation_range_max = 7;
 
     if (rotation < rotation_range_min || rotation > rotation_range_max) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] =
+        doc[F("status")] = "error";
+        doc[F("message")] =
             "rotation must be between " + String(rotation_range_min) + " and " + String(rotation_range_max);
 
         String json;
@@ -973,8 +974,8 @@ void handleDisplayRotationSet(Webserver* webserver) {
 
     if (!configManager.save()) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Failed to save config";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Failed to save config";
 
         String json;
         serializeJson(doc, json);
@@ -986,8 +987,8 @@ void handleDisplayRotationSet(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["rotation"] = newRotation;
+    doc[F("status")] = "ok";
+    doc[F("rotation")] = newRotation;
 
     String json;
     serializeJson(doc, json);
@@ -1013,8 +1014,8 @@ void handleOtaUpload(Webserver* webserver, int mode) {
         otaStatus = "Unauthorized";
 
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Invalid or missing token";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid or missing token";
 
         String json;
 
@@ -1053,8 +1054,8 @@ void handleOtaUpload(Webserver* webserver, int mode) {
 void handleOtaFinished(Webserver* webserver) {
     if (!validateBearerToken(webserver)) {
         JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Invalid or missing token";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid or missing token";
 
         String json;
         serializeJson(doc, json);
@@ -1068,11 +1069,11 @@ void handleOtaFinished(Webserver* webserver) {
     JsonDocument doc;
     int constexpr rebootDelayMs = 5000;
 
-    doc["status"] = "Upload successful";
-    doc["message"] = otaStatus;
+    doc[F("status")] = "Upload successful";
+    doc[F("message")] = otaStatus;
 
     if (otaError) {
-        doc["status"] = "Error";
+        doc[F("status")] = "Error";
     }
 
     otaInProgress = false;
@@ -1109,8 +1110,8 @@ void handlePlayGif(Webserver* webserver) {
     if (err) {
         JsonDocument resp;
 
-        resp["status"] = "error";
-        resp["message"] = "invalid json";
+        resp[F("status")] = "error";
+        resp[F("message")] = "invalid json";
 
         String jsonOut;
 
@@ -1122,11 +1123,11 @@ void handlePlayGif(Webserver* webserver) {
         return;
     }
 
-    const char* name = doc["name"];
+    const char* name = doc[F("name")];
     if (name == nullptr || strlen(name) == 0) {
         JsonDocument resp;
-        resp["status"] = "error";
-        resp["message"] = "missing name";
+        resp[F("status")] = "error";
+        resp[F("message")] = "missing name";
 
         String jsonOut;
         serializeJson(resp, jsonOut);
@@ -1152,8 +1153,8 @@ void handlePlayGif(Webserver* webserver) {
     } else {
         JsonDocument resp;
 
-        resp["status"] = "error";
-        resp["message"] = "file not found";
+        resp[F("status")] = "error";
+        resp[F("message")] = "file not found";
 
         String jsonOut;
         serializeJson(resp, jsonOut);
@@ -1168,8 +1169,8 @@ void handlePlayGif(Webserver* webserver) {
 
     JsonDocument resp;
 
-    resp["status"] = playOk ? "playing" : "error";
-    resp["file"] = foundPath;
+    resp[F("status")] = playOk ? "playing" : "error";
+    resp[F("file")] = foundPath;
 
     String jsonOut;
 
@@ -1190,10 +1191,10 @@ void sendJsonDoc(Webserver* webserver, int code, JsonDocument& doc) {
     webserver->raw().send(code, "application/json", json);
 }
 
-static void sendIdleError(Webserver* webserver, const char* message) {
+static void sendIdleError(Webserver* webserver, const __FlashStringHelper* message) {
     JsonDocument doc;
-    doc["status"] = "error";
-    doc["message"] = message;
+    doc[F("status")] = "error";
+    doc[F("message")] = String(message);
     sendJsonDoc(webserver, HTTP_CODE_BAD_REQUEST, doc);
 }
 
@@ -1236,13 +1237,13 @@ void handleSystemGet(Webserver* webserver) {
  */
 static auto runDisplayAction(const String& action, JsonDocument& body) -> bool {
     if (action == "reinit") {
-        DisplayManager::reinit(body["vendor"].as<bool>(), body["invert"].isNull() ? true : body["invert"].as<bool>());
+        DisplayManager::reinit(body[F("vendor")].as<bool>(), body[F("invert")].isNull() ? true : body[F("invert")].as<bool>());
         ChannelManager::invalidate();
 
         return true;
     }
     if (action == "fill") {
-        const String color = body["color"].as<String>();
+        const String color = body[F("color")].as<String>();
         constexpr std::array<std::pair<const char*, uint16_t>, 4> COLORS = {
             {{"red", LCD_RED}, {"green", LCD_GREEN}, {"blue", LCD_BLUE}, {"white", LCD_WHITE}}};
         uint16_t value = LCD_BLACK;
@@ -1256,7 +1257,7 @@ static auto runDisplayAction(const String& action, JsonDocument& body) -> bool {
         return true;
     }
     if (action == "backlight") {
-        DisplayManager::setBacklight(body["pct"].as<uint8_t>());
+        DisplayManager::setBacklight(body[F("pct")].as<uint8_t>());
 
         return true;
     }
@@ -1267,7 +1268,7 @@ static auto runDisplayAction(const String& action, JsonDocument& body) -> bool {
     }
     if (action == "screen") {
         // Preview a boot screen: connecting | online | setup. {"name": "restore"} hands the screen back.
-        const String name = body["name"].as<String>();
+        const String name = body[F("name")].as<String>();
         if (name == "connecting") {
             BootScreen::showConnecting(WiFi.SSID().c_str());
         } else if (name == "online") {
@@ -1307,7 +1308,7 @@ void handleUsageRefresh(Webserver* webserver) {
 
     UsageManager::resume();  // also clears a stopped / rejected state: an explicit refresh is the owner asking again
     JsonDocument doc;
-    doc["status"] = "scheduled";
+    doc[F("status")] = "scheduled";
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -1322,14 +1323,14 @@ void handleTlsSelfTest(Webserver* webserver) {
 
     JsonDocument body;
     deserializeJson(body, webserver->raw().arg("plain"));
-    const String host = body["host"].is<const char*>() ? body["host"].as<String>() : String("claude.ai");
-    const bool verify = body["verify"].isNull() ? true : body["verify"].as<bool>();
+    const String host = body[F("host")].is<const char*>() ? body[F("host")].as<String>() : String("claude.ai");
+    const bool verify = body[F("verify")].isNull() ? true : body[F("verify")].as<bool>();
     // Only the hosts the firmware really talks to: pointing the BearSSL client at an arbitrary server (for example one
     // with an RSA or untrusted chain) is how the TLS stack's fixed 6 KB stack can be overrun and the device reset.
     if (host != "claude.ai" && host != "chatgpt.com") {
         JsonDocument refusal;
-        refusal["status"] = "error";
-        refusal["message"] = "host must be claude.ai or chatgpt.com";
+        refusal[F("status")] = "error";
+        refusal[F("message")] = "host must be claude.ai or chatgpt.com";
         sendJsonDoc(webserver, HTTP_CODE_BAD_REQUEST, refusal);
 
         return;
@@ -1338,24 +1339,24 @@ void handleTlsSelfTest(Webserver* webserver) {
     ChannelManager::releaseMemory();
     Display::releaseFont();
     JsonDocument doc;
-    doc["host"] = host;
-    doc["verify"] = verify;
-    doc["heap_before"] = ESP.getFreeHeap();            // NOLINT(readability-static-accessed-through-instance)
-    doc["block_before"] = ESP.getMaxFreeBlockSize();   // NOLINT(readability-static-accessed-through-instance)
+    doc[F("host")] = host;
+    doc[F("verify")] = verify;
+    doc[F("heap_before")] = ESP.getFreeHeap();            // NOLINT(readability-static-accessed-through-instance)
+    doc[F("block_before")] = ESP.getMaxFreeBlockSize();   // NOLINT(readability-static-accessed-through-instance)
     if (!TlsFetch::heapOk()) {
-        doc["status"] = "error";
-        doc["message"] = "not enough contiguous heap for a TLS handshake";
+        doc[F("status")] = "error";
+        doc[F("message")] = "not enough contiguous heap for a TLS handshake";
         sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 
         return;
     }
 
     const TlsFetch::Result result = TlsFetch::selfTest(host.c_str(), verify);
-    doc["status"] = "ok";
-    doc["http_code"] = result.code;
-    doc["elapsed_ms"] = result.elapsedMs;
-    doc["heap_after"] = ESP.getFreeHeap();           // NOLINT(readability-static-accessed-through-instance)
-    doc["block_after"] = ESP.getMaxFreeBlockSize();  // NOLINT(readability-static-accessed-through-instance)
+    doc[F("status")] = "ok";
+    doc[F("http_code")] = result.code;
+    doc[F("elapsed_ms")] = result.elapsedMs;
+    doc[F("heap_after")] = ESP.getFreeHeap();           // NOLINT(readability-static-accessed-through-instance)
+    doc[F("block_after")] = ESP.getMaxFreeBlockSize();  // NOLINT(readability-static-accessed-through-instance)
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -1374,19 +1375,19 @@ void handleDisplayDebug(Webserver* webserver) {
 
     JsonDocument body;
     if (deserializeJson(body, webserver->raw().arg("plain")) != DeserializationError::Ok) {
-        sendIdleError(webserver, "invalid json");
+        sendIdleError(webserver, F("invalid json"));
 
         return;
     }
 
-    if (!runDisplayAction(body["action"].as<String>(), body)) {
-        sendIdleError(webserver, "action must be reinit, fill, backlight, invert or screen");
+    if (!runDisplayAction(body[F("action")].as<String>(), body)) {
+        sendIdleError(webserver, F("action must be reinit, fill, backlight, invert or screen"));
 
         return;
     }
 
     JsonDocument doc;
-    doc["status"] = "ok";
+    doc[F("status")] = "ok";
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -1426,43 +1427,43 @@ void handleUiGet(Webserver* webserver) {
 
     const UiSettings& settings = configManager.ui;
     JsonDocument doc;
-    doc["mode"] = settings.idleMode.c_str();
-    doc["gif"] = settings.idleGif.c_str();
-    doc["interval_s"] = settings.channelSec;
-    doc["auto_rotate"] = settings.autoRotate;
-    doc["clock_24h"] = settings.clock24h;
-    doc["user_name"] = settings.userName.c_str();
-    doc["pin_approvals"] = settings.pinApprovals;
-    doc["approval_ttl_min"] = settings.approvalTtlMin;
-    doc["agent_done_cards"] = settings.agentDoneCards;
-    doc["show_claude"] = settings.showClaude;
-    doc["show_codex"] = settings.showCodex;
-    doc["show_trend"] = settings.showTrend;
-    doc["show_ai"] = settings.showAiDash;
-    doc["show_info"] = settings.showInfo;
-    doc["refresh_min"] = settings.refreshMin;
-    doc["claude_weekly_hero"] = settings.claudeWeeklyHero;
-    doc["codex_weekly_hero"] = settings.codexWeeklyHero;
-    doc["tls_verify"] = settings.tlsVerify;
-    doc["show_weather"] = settings.showWeather;
-    doc["fahrenheit"] = settings.useFahrenheit;
-    doc["weather_lat"] = settings.weatherLat;
-    doc["weather_lon"] = settings.weatherLon;
-    doc["weather_name"] = settings.weatherName.c_str();
-    doc["timezone"] = configManager.timezone.c_str();
-    doc["active_channel"] = ChannelManager::activeName();
+    doc[F("mode")] = settings.idleMode.c_str();
+    doc[F("gif")] = settings.idleGif.c_str();
+    doc[F("interval_s")] = settings.channelSec;
+    doc[F("auto_rotate")] = settings.autoRotate;
+    doc[F("clock_24h")] = settings.clock24h;
+    doc[F("user_name")] = settings.userName.c_str();
+    doc[F("pin_approvals")] = settings.pinApprovals;
+    doc[F("approval_ttl_min")] = settings.approvalTtlMin;
+    doc[F("agent_done_cards")] = settings.agentDoneCards;
+    doc[F("show_claude")] = settings.showClaude;
+    doc[F("show_codex")] = settings.showCodex;
+    doc[F("show_trend")] = settings.showTrend;
+    doc[F("show_ai")] = settings.showAiDash;
+    doc[F("show_info")] = settings.showInfo;
+    doc[F("refresh_min")] = settings.refreshMin;
+    doc[F("claude_weekly_hero")] = settings.claudeWeeklyHero;
+    doc[F("codex_weekly_hero")] = settings.codexWeeklyHero;
+    doc[F("tls_verify")] = settings.tlsVerify;
+    doc[F("show_weather")] = settings.showWeather;
+    doc[F("fahrenheit")] = settings.useFahrenheit;
+    doc[F("weather_lat")] = settings.weatherLat;
+    doc[F("weather_lon")] = settings.weatherLon;
+    doc[F("weather_name")] = settings.weatherName.c_str();
+    doc[F("timezone")] = configManager.timezone.c_str();
+    doc[F("active_channel")] = ChannelManager::activeName();
 
     constexpr time_t REASONABLE_EPOCH = 1600000000;
     constexpr size_t TIME_TEXT_SIZE = 24;
     const time_t now = time(nullptr);
     const bool valid = now > REASONABLE_EPOCH;
-    doc["time_valid"] = valid;
+    doc[F("time_valid")] = valid;
     if (valid) {
         struct tm local {};
         localtime_r(&now, &local);
         std::array<char, TIME_TEXT_SIZE> buf{};
         strftime(buf.data(), buf.size(), "%Y-%m-%d %H:%M:%S", &local);
-        doc["local_time"] = buf.data();
+        doc[F("local_time")] = buf.data();
     }
 
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
@@ -1472,27 +1473,27 @@ void handleUiGet(Webserver* webserver) {
  * @brief Validate a settings body and apply it onto `next` / `nextTz`.
  * @return nullptr when everything is valid, otherwise the message to send back with a 400
  */
-static auto applyUiSchedule(JsonDocument& body, UiSettings& next) -> const char* {
+static auto applyUiSchedule(JsonDocument& body, UiSettings& next) -> const __FlashStringHelper* {
     // "mode"/"gif"/"interval_s" are the original names, "idle_mode"/"idle_gif"/"channel_sec" the config names
-    JsonVariantConst modeVal = body["mode"].isNull() ? body["idle_mode"] : body["mode"];
+    JsonVariantConst modeVal = body[F("mode")].isNull() ? body[F("idle_mode")] : body[F("mode")];
     if (!modeVal.isNull()) {
         const std::string mode = modeVal | "";
         if (mode != "clock" && mode != "gif" && mode != "cycle") {
-            return "mode must be clock, gif or cycle";
+            return F("mode must be clock, gif or cycle");
         }
         next.idleMode = mode;
     }
-    JsonVariantConst gifVal = body["gif"].isNull() ? body["idle_gif"] : body["gif"];
+    JsonVariantConst gifVal = body[F("gif")].isNull() ? body[F("idle_gif")] : body[F("gif")];
     if (!gifVal.isNull()) {
         next.idleGif = gifVal | "";
     }
-    JsonVariantConst intervalVal = body["interval_s"].isNull() ? body["channel_sec"] : body["interval_s"];
+    JsonVariantConst intervalVal = body[F("interval_s")].isNull() ? body[F("channel_sec")] : body[F("interval_s")];
     if (!intervalVal.isNull()) {
         const int interval = intervalVal | 0;
         constexpr int MIN_INTERVAL_S = 3;
         constexpr int MAX_INTERVAL_S = 3600;
         if (interval < MIN_INTERVAL_S || interval > MAX_INTERVAL_S) {
-            return "interval_s must be between 3 and 3600";
+            return F("interval_s must be between 3 and 3600");
         }
         next.channelSec = static_cast<uint16_t>(interval);
     }
@@ -1501,34 +1502,34 @@ static auto applyUiSchedule(JsonDocument& body, UiSettings& next) -> const char*
 }
 
 /** @brief The weather location: weather_lat (-90..90), weather_lon (-180..180), weather_name (label, 24 characters). */
-static auto applyWeatherPlace(JsonDocument& body, UiSettings& next) -> const char* {
+static auto applyWeatherPlace(JsonDocument& body, UiSettings& next) -> const __FlashStringHelper* {
     constexpr float MAX_LAT = 90.0F;
     constexpr float MAX_LON = 180.0F;
     constexpr size_t MAX_PLACE_NAME = 24;
-    if (!body["weather_lat"].isNull()) {
-        if (!body["weather_lat"].is<float>()) {
-            return "weather_lat must be a number between -90 and 90";
+    if (!body[F("weather_lat")].isNull()) {
+        if (!body[F("weather_lat")].is<float>()) {
+            return F("weather_lat must be a number between -90 and 90");
         }
-        const float lat = body["weather_lat"].as<float>();
+        const float lat = body[F("weather_lat")].as<float>();
         if (lat < -MAX_LAT || lat > MAX_LAT) {
-            return "weather_lat must be a number between -90 and 90";
+            return F("weather_lat must be a number between -90 and 90");
         }
         next.weatherLat = lat;
     }
-    if (!body["weather_lon"].isNull()) {
-        if (!body["weather_lon"].is<float>()) {
-            return "weather_lon must be a number between -180 and 180";
+    if (!body[F("weather_lon")].isNull()) {
+        if (!body[F("weather_lon")].is<float>()) {
+            return F("weather_lon must be a number between -180 and 180");
         }
-        const float lon = body["weather_lon"].as<float>();
+        const float lon = body[F("weather_lon")].as<float>();
         if (lon < -MAX_LON || lon > MAX_LON) {
-            return "weather_lon must be a number between -180 and 180";
+            return F("weather_lon must be a number between -180 and 180");
         }
         next.weatherLon = lon;
     }
-    if (!body["weather_name"].isNull()) {
-        next.weatherName = body["weather_name"] | "";
+    if (!body[F("weather_name")].isNull()) {
+        next.weatherName = body[F("weather_name")] | "";
         if (!validUserName(next.weatherName) || next.weatherName.size() > MAX_PLACE_NAME) {
-            return "weather_name must be printable ASCII, at most 24 characters";
+            return F("weather_name must be printable ASCII, at most 24 characters");
         }
     }
 
@@ -1536,7 +1537,7 @@ static auto applyWeatherPlace(JsonDocument& body, UiSettings& next) -> const cha
 }
 
 /** @brief The on/off switches of the usage pages and the usage options. */
-static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const char* {
+static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const __FlashStringHelper* {
     struct Flag {
         const char* key;
         bool UiSettings::*field;
@@ -1553,25 +1554,25 @@ static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const char*
     for (const Flag& flag : FLAGS) {
         if (!body[flag.key].isNull()) {
             if (!body[flag.key].is<bool>()) {
-                return "show_*, fahrenheit, *_weekly_hero and tls_verify must be true or false";
+                return F("show_*, fahrenheit, *_weekly_hero and tls_verify must be true or false");
             }
             next.*(flag.field) = body[flag.key].as<bool>();
         }
     }
-    if (!body["tls_verify"].isNull()) {
-        if (!body["tls_verify"].is<bool>()) {
-            return "show_*, fahrenheit, *_weekly_hero and tls_verify must be true or false";
+    if (!body[F("tls_verify")].isNull()) {
+        if (!body[F("tls_verify")].is<bool>()) {
+            return F("show_*, fahrenheit, *_weekly_hero and tls_verify must be true or false");
         }
-        next.tlsVerify = body["tls_verify"].as<bool>();
+        next.tlsVerify = body[F("tls_verify")].as<bool>();
     }
-    if (const char* error = applyWeatherPlace(body, next); error != nullptr) {
+    if (const __FlashStringHelper* error = applyWeatherPlace(body, next); error != nullptr) {
         return error;
     }
-    if (!body["refresh_min"].isNull()) {
-        const int minutes = body["refresh_min"] | 0;
+    if (!body[F("refresh_min")].isNull()) {
+        const int minutes = body[F("refresh_min")] | 0;
         constexpr int MAX_REFRESH_MIN = 60;
         if (minutes < 1 || minutes > MAX_REFRESH_MIN) {
-            return "refresh_min must be between 1 and 60";
+            return F("refresh_min must be between 1 and 60");
         }
         next.refreshMin = static_cast<uint16_t>(minutes);
     }
@@ -1579,37 +1580,37 @@ static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const char*
     return nullptr;
 }
 
-static auto applyUiFlags(JsonDocument& body, UiSettings& next, std::string& nextTz) -> const char* {
-    if (!body["auto_rotate"].isNull()) {
-        next.autoRotate = body["auto_rotate"] | next.autoRotate;
+static auto applyUiFlags(JsonDocument& body, UiSettings& next, std::string& nextTz) -> const __FlashStringHelper* {
+    if (!body[F("auto_rotate")].isNull()) {
+        next.autoRotate = body[F("auto_rotate")] | next.autoRotate;
     }
-    if (!body["clock_24h"].isNull()) {
-        next.clock24h = body["clock_24h"] | next.clock24h;
+    if (!body[F("clock_24h")].isNull()) {
+        next.clock24h = body[F("clock_24h")] | next.clock24h;
     }
-    if (!body["pin_approvals"].isNull()) {
-        next.pinApprovals = body["pin_approvals"] | next.pinApprovals;
+    if (!body[F("pin_approvals")].isNull()) {
+        next.pinApprovals = body[F("pin_approvals")] | next.pinApprovals;
     }
-    if (!body["agent_done_cards"].isNull()) {
-        next.agentDoneCards = body["agent_done_cards"] | next.agentDoneCards;
+    if (!body[F("agent_done_cards")].isNull()) {
+        next.agentDoneCards = body[F("agent_done_cards")] | next.agentDoneCards;
     }
-    if (!body["approval_ttl_min"].isNull()) {
-        const int ttl = body["approval_ttl_min"] | 0;
+    if (!body[F("approval_ttl_min")].isNull()) {
+        const int ttl = body[F("approval_ttl_min")] | 0;
         constexpr int MAX_APPROVAL_TTL_MIN = 1440;
         if (ttl < 1 || ttl > MAX_APPROVAL_TTL_MIN) {
-            return "approval_ttl_min must be between 1 and 1440";
+            return F("approval_ttl_min must be between 1 and 1440");
         }
         next.approvalTtlMin = static_cast<uint16_t>(ttl);
     }
-    if (!body["user_name"].isNull()) {
-        next.userName = body["user_name"] | "";
+    if (!body[F("user_name")].isNull()) {
+        next.userName = body[F("user_name")] | "";
         if (!validUserName(next.userName)) {
-            return "user_name must be printable ASCII, at most 24 characters";
+            return F("user_name must be printable ASCII, at most 24 characters");
         }
     }
-    if (!body["timezone"].isNull()) {
-        nextTz = body["timezone"] | "";
+    if (!body[F("timezone")].isNull()) {
+        nextTz = body[F("timezone")] | "";
         if (!validTimezone(nextTz.c_str())) {
-            return "timezone must be a POSIX TZ string, e.g. GMT0BST,M3.5.0/1,M10.5.0";
+            return F("timezone must be a POSIX TZ string, e.g. GMT0BST,M3.5.0/1,M10.5.0");
         }
     }
 
@@ -1618,7 +1619,7 @@ static auto applyUiFlags(JsonDocument& body, UiSettings& next, std::string& next
     const bool needsGif = next.idleMode == "gif" || next.idleMode == "cycle";
     if ((needsGif || !next.idleGif.empty()) &&
         (!validGifName(next.idleGif) || !LittleFS.exists(String("/gif/") + next.idleGif.c_str()))) {
-        return "gif must be the name of an existing file in /gif (required for modes gif and cycle)";
+        return F("gif must be the name of an existing file in /gif (required for modes gif and cycle)");
     }
 
     return nullptr;
@@ -1628,14 +1629,14 @@ static auto applyUiFlags(JsonDocument& body, UiSettings& next, std::string& next
  * @brief Validate a settings body and apply it onto `next` / `nextTz`.
  * @return nullptr when everything is valid, otherwise the message to send back with a 400
  */
-static auto applyUiBody(JsonDocument& body, UiSettings& next, std::string& nextTz) -> const char* {
-    if (const char* error = applyUiSchedule(body, next); error != nullptr) {
+static auto applyUiBody(JsonDocument& body, UiSettings& next, std::string& nextTz) -> const __FlashStringHelper* {
+    if (const __FlashStringHelper* error = applyUiSchedule(body, next); error != nullptr) {
         return error;
     }
-    if (const char* error = applyUiFlags(body, next, nextTz); error != nullptr) {
+    if (const __FlashStringHelper* error = applyUiFlags(body, next, nextTz); error != nullptr) {
         return error;
     }
-    if (const char* error = applyUsageFlags(body, next); error != nullptr) {
+    if (const __FlashStringHelper* error = applyUsageFlags(body, next); error != nullptr) {
         return error;
     }
 
@@ -1652,14 +1653,14 @@ void handleUiSet(Webserver* webserver) {
 
     JsonDocument body;
     if (deserializeJson(body, webserver->raw().arg("plain")) != DeserializationError::Ok || !body.is<JsonObject>()) {
-        sendIdleError(webserver, "invalid json");
+        sendIdleError(webserver, F("invalid json"));
 
         return;
     }
 
     UiSettings next = configManager.ui;
     std::string nextTz = configManager.timezone;
-    if (const char* error = applyUiBody(body, next, nextTz); error != nullptr) {
+    if (const __FlashStringHelper* error = applyUiBody(body, next, nextTz); error != nullptr) {
         sendIdleError(webserver, error);
 
         return;
@@ -1671,7 +1672,7 @@ void handleUiSet(Webserver* webserver) {
     ChannelManager::applySettings(next);
 
     JsonDocument doc;
-    doc["status"] = configManager.save() ? "ok" : "error";
+    doc[F("status")] = configManager.save() ? "ok" : "error";
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -1685,10 +1686,10 @@ void handleCredentialsGet(Webserver* webserver) {
 
     const CredentialStore::Status status = CredentialStore::status();
     JsonDocument doc;
-    doc["claude_key_set"] = status.claudeKeySet;
-    doc["codex_token_set"] = status.codexTokenSet;
-    doc["codex_device_id_set"] = status.codexDeviceIdSet;
-    doc["codex_model_label"] = status.codexModelLabel;
+    doc[F("claude_key_set")] = status.claudeKeySet;
+    doc[F("codex_token_set")] = status.codexTokenSet;
+    doc[F("codex_device_id_set")] = status.codexDeviceIdSet;
+    doc[F("codex_model_label")] = status.codexModelLabel;
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -1705,7 +1706,7 @@ void handleCredentialsSet(Webserver* webserver) {
 
     JsonDocument body;
     if (deserializeJson(body, webserver->raw().arg("plain")) != DeserializationError::Ok || !body.is<JsonObject>()) {
-        sendIdleError(webserver, "invalid json");
+        sendIdleError(webserver, F("invalid json"));
 
         return;
     }
@@ -1714,17 +1715,17 @@ void handleCredentialsSet(Webserver* webserver) {
     for (JsonPair pair : body.as<JsonObject>()) {
         const char* field = pair.key().c_str();
         if (!CredentialStore::knownField(field)) {
-            sendIdleError(webserver, "unknown field (claude_key, codex_token, codex_device_id, codex_model_label)");
+            sendIdleError(webserver, F("unknown field (claude_key, codex_token, codex_device_id, codex_model_label)"));
 
             return;
         }
         if (!pair.value().is<const char*>()) {
-            sendIdleError(webserver, "values must be strings (empty string clears)");
+            sendIdleError(webserver, F("values must be strings (empty string clears)"));
 
             return;
         }
         if (!CredentialStore::put(field, String(pair.value().as<const char*>()))) {
-            sendIdleError(webserver, "value too long or storage error");
+            sendIdleError(webserver, F("value too long or storage error"));
 
             return;
         }
@@ -1734,8 +1735,8 @@ void handleCredentialsSet(Webserver* webserver) {
     UsageManager::credentialsChanged();
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["changed"] = changed;
+    doc[F("status")] = "ok";
+    doc[F("changed")] = changed;
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 
@@ -1751,7 +1752,7 @@ void handleStopGif(Webserver* webserver) {
 
     const bool stopped = ChannelManager::stopIdleGif();
 
-    resp["status"] = stopped ? "stopped" : "error";
+    resp[F("status")] = stopped ? "stopped" : "error";
 
     String jsonOut;
     serializeJson(resp, jsonOut);
@@ -1774,8 +1775,8 @@ void handleDeleteGif(Webserver* webserver) {
 
     if (err) {
         JsonDocument resp;
-        resp["status"] = "error";
-        resp["message"] = "invalid json";
+        resp[F("status")] = "error";
+        resp[F("message")] = "invalid json";
 
         String jsonOut;
 
@@ -1787,11 +1788,11 @@ void handleDeleteGif(Webserver* webserver) {
         return;
     }
 
-    const char* name = doc["name"];
+    const char* name = doc[F("name")];
     if (name == nullptr || strlen(name) == 0) {
         JsonDocument resp;
-        resp["status"] = "error";
-        resp["message"] = "missing name";
+        resp[F("status")] = "error";
+        resp[F("message")] = "missing name";
 
         String jsonOut;
 
@@ -1810,8 +1811,8 @@ void handleDeleteGif(Webserver* webserver) {
 
     if (!LittleFS.exists(path)) {
         JsonDocument resp;
-        resp["status"] = "error";
-        resp["message"] = "file not found";
+        resp[F("status")] = "error";
+        resp[F("message")] = "file not found";
 
         String jsonOut;
 
@@ -1825,9 +1826,9 @@ void handleDeleteGif(Webserver* webserver) {
 
     if (LittleFS.remove(path)) {
         JsonDocument resp;
-        resp["status"] = "success";
-        resp["message"] = "file removed";
-        resp["file"] = path;
+        resp[F("status")] = "success";
+        resp[F("message")] = "file removed";
+        resp[F("file")] = path;
 
         String jsonOut;
         serializeJson(resp, jsonOut);
@@ -1838,8 +1839,8 @@ void handleDeleteGif(Webserver* webserver) {
         Logger::info((String("Removed file: ") + path).c_str(), "API::GIF");
     } else {
         JsonDocument resp;
-        resp["status"] = "error";
-        resp["message"] = "failed to remove file";
+        resp[F("status")] = "error";
+        resp[F("message")] = "failed to remove file";
 
         String jsonOut;
         serializeJson(resp, jsonOut);
@@ -1860,14 +1861,14 @@ void handleWifiScan(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    JsonArray networks = doc["networks"].to<JsonArray>();
+    JsonArray networks = doc[F("networks")].to<JsonArray>();
 
     if (wifiManager != nullptr) {
         WiFiManager::scanNetworks(networks);
     }
 
     String out;
-    serializeJson(doc["networks"], out);
+    serializeJson(doc[F("networks")], out);
 
     setCorsHeaders(webserver);
     webserver->raw().send(HTTP_CODE_OK, "application/json", out);
@@ -1888,8 +1889,8 @@ void handleWifiConnect(Webserver* webserver) {
     if (err) {
         JsonDocument resp;
 
-        resp["status"] = "error";
-        resp["message"] = "invalid json";
+        resp[F("status")] = "error";
+        resp[F("message")] = "invalid json";
 
         String jsonOut;
         serializeJson(resp, jsonOut);
@@ -1900,14 +1901,14 @@ void handleWifiConnect(Webserver* webserver) {
         return;
     }
 
-    const char* ssid = doc["ssid"] | "";
-    const char* password = doc["password"] | "";
+    const char* ssid = doc[F("ssid")] | "";
+    const char* password = doc[F("password")] | "";
 
     if (strlen(ssid) == 0) {
         JsonDocument resp;
 
-        resp["status"] = "error";
-        resp["message"] = "missing ssid";
+        resp[F("status")] = "error";
+        resp[F("message")] = "missing ssid";
 
         String jsonOut;
 
@@ -1927,8 +1928,8 @@ void handleWifiConnect(Webserver* webserver) {
 
     JsonDocument resp;
 
-    resp["status"] = connectOk ? "connected" : "error";
-    resp["ssid"] = ssid;
+    resp[F("status")] = connectOk ? "connected" : "error";
+    resp[F("ssid")] = ssid;
 
     if (connectOk) {
         resp["ip"] = wifiManager->getIP().toString();
@@ -1937,7 +1938,7 @@ void handleWifiConnect(Webserver* webserver) {
     }
 
     if (!connectOk) {
-        resp["message"] = "failed to connect";
+        resp[F("message")] = "failed to connect";
     }
 
     String jsonOut;
@@ -1959,8 +1960,8 @@ void handleWifiStatus(Webserver* webserver) {
 
     bool connected = (wifiManager != nullptr) && WiFiManager::isConnected();
 
-    resp["connected"] = connected;
-    resp["ssid"] = connected ? WiFiManager::getConnectedSSID() : "";
+    resp[F("connected")] = connected;
+    resp[F("ssid")] = connected ? WiFiManager::getConnectedSSID() : "";
     resp["ip"] = connected ? wifiManager->getIP().toString() : "";
 
     String jsonOut;
@@ -2025,7 +2026,7 @@ static void otaHandleWrite(HTTPUpload& upload) {
             otaError = true;
             otaStatus = "Update canceled";
             otaInProgress = false;
-            Logger::warn("OTA canceled by user", "API::OTA");
+            Logger::warn(F("OTA canceled by user"), "API::OTA");
 
             DisplayManager::drawTextWrapped(OTA_TEXT_X_OFFSET, OTA_TEXT_Y_OFFSET, "Canceled", 2, LCD_WHITE, LCD_BLACK,
                                             true);
@@ -2108,7 +2109,7 @@ void handleLogsGet(Webserver* webserver) {
     }
 
     JsonDocument doc;
-    JsonArray logsArray = doc["logs"].to<JsonArray>();
+    JsonArray logsArray = doc[F("logs")].to<JsonArray>();
 
     size_t count = Logger::getLogCount();
     for (size_t i = 0; i < count; i++) {
@@ -2118,7 +2119,7 @@ void handleLogsGet(Webserver* webserver) {
         }
     }
 
-    doc["count"] = count;
+    doc[F("count")] = count;
 
     String json;
     serializeJson(doc, json);
@@ -2155,8 +2156,8 @@ void handleLogsClear(Webserver* webserver) {
     Logger::clearLogs();
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Logs cleared";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "Logs cleared";
 
     String json;
     serializeJson(doc, json);

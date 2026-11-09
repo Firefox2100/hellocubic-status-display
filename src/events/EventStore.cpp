@@ -57,7 +57,7 @@ auto readRecord(File& file, Events::Record& out) -> bool {
 auto commitFile(const char* tmpPath, size_t count) -> bool {
     LittleFS.remove(LIVE_FILE);
     if (!LittleFS.rename(tmpPath, LIVE_FILE)) {
-        Logger::error("Could not install the new event file", LOG_TAG);
+        Logger::error(F("Could not install the new event file"), LOG_TAG);
 
         return false;
     }
@@ -133,7 +133,7 @@ void EventStore::begin() {
     const bool valid = read && headerValid(header, file.size());
     file.close();
     if (!valid) {
-        Logger::warn("Event file damaged or from another build: moved aside, schedule is empty", LOG_TAG);
+        Logger::warn(F("Event file damaged or from another build: moved aside, schedule is empty"), LOG_TAG);
         LittleFS.remove(QUARANTINE_FILE);
         LittleFS.rename(LIVE_FILE, QUARANTINE_FILE);
         g_count = 0;

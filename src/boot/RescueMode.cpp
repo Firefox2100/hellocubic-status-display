@@ -104,7 +104,7 @@ auto RescueMode::checkBootLoop() -> bool {
     persistentCount++;
     bool putOk = configManager.secure.put("rescue_persistent_crash_count", String(persistentCount).c_str());
     if (!putOk) {
-        Logger::warn("Failed to persist rescue_persistent_crash_count", "RescueMode");
+        Logger::warn(F("Failed to persist rescue_persistent_crash_count"), "RescueMode");
     } else {
         Logger::info((String("Persistent boot counter incremented to ") + String(persistentCount)).c_str(),
                      "RescueMode");
@@ -129,14 +129,14 @@ auto RescueMode::checkBootLoop() -> bool {
 
     if (data.crashCount >= BOOT_LOOP_THRESHOLD) {
         _active = true;
-        Logger::warn("Boot loop detected (RTC), entering rescue mode", "RescueMode");
+        Logger::warn(F("Boot loop detected (RTC), entering rescue mode"), "RescueMode");
 
         return true;
     }
 
     if (persistentCount >= BOOT_LOOP_THRESHOLD) {
         _active = true;
-        Logger::warn("Boot loop detected (persistent counter), entering rescue mode", "RescueMode");
+        Logger::warn(F("Boot loop detected (persistent counter), entering rescue mode"), "RescueMode");
 
         return true;
     }
@@ -299,21 +299,21 @@ static void rescueCors() {
 static void handleRescueStatus() {
     JsonDocument doc;
 
-    doc["status"] = "rescue";
-    doc["firmware"] = PROJECT_VER_STR;
-    doc["free_heap"] = ESP.getFreeHeap();                    // NOLINT(readability-static-accessed-through-instance)
-    doc["heap_fragmentation"] = ESP.getHeapFragmentation();  // NOLINT(readability-static-accessed-through-instance)
-    doc["cpu_mhz"] = ESP.getCpuFreqMHz();                    // NOLINT(readability-static-accessed-through-instance)
+    doc[F("status")] = "rescue";
+    doc[F("firmware")] = PROJECT_VER_STR;
+    doc[F("free_heap")] = ESP.getFreeHeap();                    // NOLINT(readability-static-accessed-through-instance)
+    doc[F("heap_fragmentation")] = ESP.getHeapFragmentation();  // NOLINT(readability-static-accessed-through-instance)
+    doc[F("cpu_mhz")] = ESP.getCpuFreqMHz();                    // NOLINT(readability-static-accessed-through-instance)
 
     auto* gfx = DisplayManager::getGfx();
 
     if (gfx != nullptr) {
-        doc["screen_width"] = gfx->width();
-        doc["screen_height"] = gfx->height();
+        doc[F("screen_width")] = gfx->width();
+        doc[F("screen_height")] = gfx->height();
     }
 
-    doc["flash_size"] = ESP.getFlashChipRealSize();  // NOLINT(readability-static-accessed-through-instance)
-    doc["reset_reason"] = ESP.getResetReason();      // NOLINT(readability-static-accessed-through-instance)
+    doc[F("flash_size")] = ESP.getFlashChipRealSize();  // NOLINT(readability-static-accessed-through-instance)
+    doc[F("reset_reason")] = ESP.getResetReason();      // NOLINT(readability-static-accessed-through-instance)
     {
         // exccause / epc1 / max_free_block for decoding the crash that led here
         JsonDocument diag;
@@ -327,11 +327,11 @@ static void handleRescueStatus() {
 
     RtcBootData data{};
     const uint32_t rtcBootCounter = (readRtcBoot(data) && data.magic == RTC_MAGIC) ? data.crashCount : 0;
-    doc["boot_counter_rtc"] = rtcBootCounter;
+    doc[F("boot_counter_rtc")] = rtcBootCounter;
 
     String persistentStr = configManager.secure.get("rescue_persistent_crash_count", "0");
-    doc["boot_counter_persistent"] = persistentStr.toInt();
-    doc["last_boot_clean"] = configManager.secure.get("rescue_last_boot_clean", "1");
+    doc[F("boot_counter_persistent")] = persistentStr.toInt();
+    doc[F("last_boot_clean")] = configManager.secure.get("rescue_last_boot_clean", "1");
 
     String json;
     serializeJson(doc, json);
@@ -348,8 +348,8 @@ static void handleRescueTokenReset() {
     if (!rescueWebserver->raw().hasArg("plain") || rescueWebserver->raw().arg("plain").length() == 0) {
         JsonDocument doc;
 
-        doc["status"] = "error";
-        doc["message"] = "Missing JSON body";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Missing JSON body";
 
         String json;
         serializeJson(doc, json);
@@ -367,8 +367,8 @@ static void handleRescueTokenReset() {
     if (err) {
         JsonDocument doc;
 
-        doc["status"] = "error";
-        doc["message"] = "Invalid JSON";
+        doc[F("status")] = "error";
+        doc[F("message")] = "Invalid JSON";
 
         String json;
         serializeJson(doc, json);
@@ -379,13 +379,13 @@ static void handleRescueTokenReset() {
         return;
     }
 
-    const char* newToken = ddoc["token"] | "";
+    const char* newToken = ddoc[F("token")] | "";
 
     if (strlen(newToken) == 0) {
         JsonDocument doc;
 
-        doc["status"] = "error";
-        doc["message"] = "token field is required";
+        doc[F("status")] = "error";
+        doc[F("message")] = "token field is required";
 
         String json;
         serializeJson(doc, json);
@@ -400,8 +400,8 @@ static void handleRescueTokenReset() {
     configManager.save();
 
     JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Token reset successfully";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "Token reset successfully";
 
     String json;
     serializeJson(doc, json);
@@ -418,8 +418,8 @@ static void handleRescueTokenReset() {
 static void handleRescueReboot() {
     JsonDocument doc;
 
-    doc["status"] = "ok";
-    doc["message"] = "Rebooting...";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "Rebooting...";
 
     String json;
     serializeJson(doc, json);
@@ -459,12 +459,12 @@ static void handleRescueOtaUpload() {
 static void handleRescueOtaFinished() {
     JsonDocument doc;
 
-    doc["status"] = "ok";
-    doc["message"] = "OTA update successful, rebooting...";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "OTA update successful, rebooting...";
 
     if (Update.hasError()) {
-        doc["status"] = "error";
-        doc["message"] = "OTA update failed";
+        doc[F("status")] = "error";
+        doc[F("message")] = "OTA update failed";
     }
 
     String json;
@@ -495,8 +495,8 @@ static void handleRescueReset() {
     configManager.secure.put("rescue_persistent_crash_count", "0");
     configManager.secure.put("rescue_last_boot_clean", "1");
 
-    doc["status"] = "ok";
-    doc["message"] = "Rescue counters reset";
+    doc[F("status")] = "ok";
+    doc[F("message")] = "Rescue counters reset";
 
     String json;
     serializeJson(doc, json);

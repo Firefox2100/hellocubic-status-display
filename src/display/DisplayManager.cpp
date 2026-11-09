@@ -501,7 +501,7 @@ static void lcdDrawTextWrapped(int16_t startX, int16_t startY, const String& tex
     }
 
     if (startX >= screenW || startY >= screenH) {
-        Logger::warn("Text start position out of bounds", "DisplayManager");
+        Logger::warn(F("Text start position out of bounds"), "DisplayManager");
 
         return;
     }
@@ -509,7 +509,7 @@ static void lcdDrawTextWrapped(int16_t startX, int16_t startY, const String& tex
     const auto charW = static_cast<int16_t>(6 * textSize);
     const auto charH = static_cast<int16_t>(8 * textSize);
     if (charW <= 0 || charH <= 0) {
-        Logger::warn("Invalid character dimensions", "DisplayManager");
+        Logger::warn(F("Invalid character dimensions"), "DisplayManager");
 
         return;
     }
@@ -517,7 +517,7 @@ static void lcdDrawTextWrapped(int16_t startX, int16_t startY, const String& tex
     int maxCharsPerLine = (screenW - startX) / charW;
     int maxLines = (screenH - startY) / charH;
     if (maxCharsPerLine <= 0 || maxLines <= 0) {
-        Logger::warn("No space for text", "DisplayManager");
+        Logger::warn(F("No space for text"), "DisplayManager");
 
         return;
     }
@@ -658,7 +658,7 @@ auto DisplayManager::playGifFullScreen(const String& path) -> bool {
     if (g_gif == nullptr) {
         g_gif = new Gif();
         if (g_gif == nullptr) {
-            Logger::error("Failed to allocate GIF decoder", "DisplayManager");
+            Logger::error(F("Failed to allocate GIF decoder"), "DisplayManager");
             return false;
         }
     }

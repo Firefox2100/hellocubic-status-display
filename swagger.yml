@@ -1518,8 +1518,79 @@ components:
       security:
         - bearerAuth: []
       description: "**Requires Authentication** - Fetch the weather again soon. This endpoint requires a valid bearer token in the Authorization header."
+  /api/v1/night:
+    get:
+      summary: "Night face settings, current state and why"
+      operationId: "op_v1_get_api_v1_night"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Night"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Night face settings, current state and why. This endpoint requires a valid bearer token in the Authorization header."
+    post:
+      summary: "Change the night settings and/or switch night on or off by hand"
+      operationId: "op_v1_post_api_v1_night"
+      responses:
+        200:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+        401:
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: "object"
+      tags:
+        - "Night"
+      security:
+        - bearerAuth: []
+      description: "**Requires Authentication** - Change the night settings and/or switch night on or off by hand. This endpoint requires a valid bearer token in the Authorization header."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                mode:
+                  type: "string"
+                  description: "disabled, sunset, schedule or manual"
+                style:
+                  type: "string"
+                  description: "face (dim night clock, notifications still shown) or off (screen off, no notifications)"
+                start:
+                  type: "string"
+                end:
+                  type: "string"
+                brightness:
+                  type: "number"
+                switch:
+                  type: "string"
+                  description: "on, off or auto: the manual switch"
+              example:
+                mode: "sunset"
+                style: "face"
+                switch: "on"
+        required: true
 
 tags:
+  - name: "Night"
+    description: "API Night endpoints"
   - name: "Weather"
     description: "API Weather endpoints"
   - name: "Presence"

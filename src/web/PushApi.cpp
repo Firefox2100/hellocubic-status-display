@@ -24,7 +24,7 @@ constexpr int HTTP_CODE_CONFLICT = 409;
 void sendError(Webserver* webserver, int code, const char* message) {
     JsonDocument doc;
     doc["ok"] = false;
-    doc["error"] = message;
+    doc[F("error")] = message;
     sendJsonDoc(webserver, code, doc);
 }
 
@@ -70,7 +70,7 @@ void handlePush(Webserver* webserver) {
     reply["ok"] = slot >= 0;
     reply["id"] = item.id;
     if (slot < 0) {
-        reply["error"] = "queue full of more important cards";
+        reply[F("error")] = "queue full of more important cards";
     }
     sendJsonDoc(webserver, slot >= 0 ? HTTP_CODE_OK : HTTP_CODE_CONFLICT, reply);
 }
@@ -81,7 +81,7 @@ void handlePushList(Webserver* webserver) {
     }
 
     JsonDocument reply;
-    JsonArray cards = reply["cards"].to<JsonArray>();
+    JsonArray cards = reply[F("cards")].to<JsonArray>();
     const Attention::Queue& queue = AttentionQueue::get();
     std::array<int, Attention::kMax> order{};
     const int count = Attention::ordered(queue, order.data());
@@ -103,11 +103,11 @@ void handlePushClear(Webserver* webserver) {
     }
 
     JsonDocument reply;
-    if (doc["all"].as<bool>()) {
-        reply["cleared"] = AttentionQueue::clearAll();
+    if (doc[F("all")].as<bool>()) {
+        reply[F("cleared")] = AttentionQueue::clearAll();
     } else {
         const char* cardId = doc["id"].is<const char*>() ? doc["id"].as<const char*>() : "";
-        reply["cleared"] = AttentionQueue::clear(cardId) ? 1 : 0;
+        reply[F("cleared")] = AttentionQueue::clear(cardId) ? 1 : 0;
     }
     sendJsonDoc(webserver, HTTP_CODE_OK, reply);
 }
