@@ -38,12 +38,16 @@ function screensHandler() {
       return this.post("/api/v1/presence", this.presence);
     },
 
+    saveBrightness() {
+      return this.post("/api/v1/ui", { brightness: this.ui.brightness });
+    },
+
     saveUi() {
       const u = this.ui;
       const body = {};
       for (const k of ["mode", "interval_s", "auto_rotate", "clock_24h", "show_claude", "show_codex",
         "show_ai", "show_trend", "show_info", "claude_weekly_hero", "codex_weekly_hero",
-        "refresh_min", "tls_verify", "show_weather", "fahrenheit", "weather_lat", "weather_lon", "weather_name"]) {
+        "refresh_min", "tls_verify", "show_weather", "fahrenheit", "brightness", "weather_lat", "weather_lon", "weather_name"]) {
         body[k] = u[k];
       }
       return this.post("/api/v1/ui", body);

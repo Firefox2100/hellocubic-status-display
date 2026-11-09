@@ -13,7 +13,6 @@ extern ConfigManager configManager;
 namespace {
 constexpr long REASONABLE_EPOCH = 1000000000L;
 constexpr uint32_t CHECK_INTERVAL_MS = 1000;
-constexpr int DAY_BACKLIGHT_PCT = 100;
 
 bool g_night = false;
 bool g_dark = false;
@@ -103,7 +102,7 @@ auto Night::revision() -> uint32_t { return g_revision; }
 
 auto Night::backlightPct() -> int {
     if (!g_night) {
-        return DAY_BACKLIGHT_PCT;
+        return static_cast<int>(configManager.ui.brightness);
     }
 
     return g_dark ? 0 : static_cast<int>(configManager.ui.nightBrightness);

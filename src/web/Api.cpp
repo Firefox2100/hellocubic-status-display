@@ -52,6 +52,8 @@ static volatile bool otaInProgress = false;
 static volatile bool otaCancelRequested = false;
 static size_t otaTotal = 0;
 
+static constexpr int MIN_BRIGHTNESS_PCT = 1;
+static constexpr int MAX_BRIGHTNESS_PCT = 100;
 static constexpr int OTA_TEXT_X_OFFSET = 50;
 static constexpr int OTA_TEXT_Y_OFFSET = 80;
 static constexpr int OTA_LOADING_Y_OFFSET = 110;
@@ -176,7 +178,7 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {post} /ui version=v1 group=Display summary="Update display settings (partial update)"
     // requiresAuth=true requestBody=application/json
-    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,show_trend:boolean,show_ai:boolean,show_info:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean,show_weather:boolean,fahrenheit:boolean,weather_lat:number,weather_lon:number,weather_name:string
+    // requestBodySchema=mode:string,gif:string,interval_s:number,auto_rotate:boolean,clock_24h:boolean,user_name:string,pin_approvals:boolean,approval_ttl_min:number,timezone:string,show_claude:boolean,show_codex:boolean,show_trend:boolean,show_ai:boolean,show_info:boolean,refresh_min:number,claude_weekly_hero:boolean,codex_weekly_hero:boolean,tls_verify:boolean,show_weather:boolean,fahrenheit:boolean,weather_lat:number,weather_lon:number,weather_name:string,brightness:number
     // example={"mode":"cycle","gif":"arch-i-use-arch-btw.gif","interval_s":15,"user_name":"Patrick","timezone":"GMT0BST,M3.5.0/1,M10.5.0"}
     // responses=200:application/json,400:application/json,401:application/json
     webserver->route("/api/v1/ui", HTTP_POST, handleUiSet);
@@ -1445,6 +1447,7 @@ void handleUiGet(Webserver* webserver) {
     doc[F("claude_weekly_hero")] = settings.claudeWeeklyHero;
     doc[F("codex_weekly_hero")] = settings.codexWeeklyHero;
     doc[F("tls_verify")] = settings.tlsVerify;
+    doc[F("brightness")] = settings.brightness;
     doc[F("show_weather")] = settings.showWeather;
     doc[F("fahrenheit")] = settings.useFahrenheit;
     doc[F("weather_lat")] = settings.weatherLat;
@@ -1568,6 +1571,13 @@ static auto applyUsageFlags(JsonDocument& body, UiSettings& next) -> const __Fla
     if (const __FlashStringHelper* error = applyWeatherPlace(body, next); error != nullptr) {
         return error;
     }
+    if (!body[F("brightness")].isNull()) {
+        const int pct = body[F("brightness")].is<int>() ? body[F("brightness")].as<int>() : 0;
+        if (pct < MIN_BRIGHTNESS_PCT || pct > MAX_BRIGHTNESS_PCT) {
+            return F("brightness must be between 1 and 100");
+        }
+        next.brightness = static_cast<uint8_t>(pct);
+    }
     if (!body[F("refresh_min")].isNull()) {
         const int minutes = body[F("refresh_min")] | 0;
         constexpr int MAX_REFRESH_MIN = 60;
@@ -1690,6 +1700,20 @@ void handleCredentialsGet(Webserver* webserver) {
     doc[F("codex_token_set")] = status.codexTokenSet;
     doc[F("codex_device_id_set")] = status.codexDeviceIdSet;
     doc[F("codex_model_label")] = status.codexModelLabel;
+    // Shape only, never the values: enough to spot a truncated, quoted or wrongly copied paste.
+    if (status.codexTokenSet) {
+        const String token = CredentialStore::get(CredentialStore::CODEX_TOKEN);
+        int dots = 0;
+        for (const char chr : std::string(token.c_str())) {
+            dots += chr == '.' ? 1 : 0;
+        }
+        doc[F("codex_token_len")] = token.length();
+        doc[F("codex_token_dots")] = dots;  // a JWT has 2
+        doc[F("codex_token_starts_eyJ")] = token.startsWith("eyJ");
+    }
+    if (status.codexDeviceIdSet) {
+        doc[F("codex_device_id_len")] = CredentialStore::get(CredentialStore::CODEX_DEVICE_ID).length();
+    }
     sendJsonDoc(webserver, HTTP_CODE_OK, doc);
 }
 

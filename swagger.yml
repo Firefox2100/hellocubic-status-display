@@ -675,6 +675,8 @@ paths:
                   type: "number"
                 weather_name:
                   type: "string"
+                brightness:
+                  type: "number"
               example:
                 mode: "cycle"
                 gif: "arch-i-use-arch-btw.gif"

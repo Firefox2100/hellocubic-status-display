@@ -63,6 +63,12 @@
           <label><input type="checkbox" x-model="ui.claude_weekly_hero" /> Claude: weekly figure first</label>
           <label><input type="checkbox" x-model="ui.codex_weekly_hero" /> Codex: weekly figure first</label>
         </fieldset>
+        <h3>Brightness</h3>
+        <label>Screen brightness
+          <input type="range" min="1" max="100" x-model.number="ui.brightness" @change="saveBrightness()" />
+          <small x-text="ui.brightness + '%'"></small>
+        </label>
+
         <h3>Night</h3>
         <p>
           At night the cube shows a dim clock only (no rotation), or turns the screen off. With the dim clock,

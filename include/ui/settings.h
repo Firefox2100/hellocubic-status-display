@@ -39,6 +39,8 @@ struct UiSettings {
     std::string weatherName = "London"; ///< label only (shown by the API and the web UI)
     bool useFahrenheit = false;
 
+    uint8_t brightness = 100;          ///< backlight % during the day (1-100); the night face has its own level
+
     // Night (see ui/night_core.h): when it starts, what the cube does, and how bright the face is
     std::string nightMode = "disabled";   ///< "disabled", "sunset", "schedule" or "manual"
     std::string nightStyle = "face";      ///< "face" (dim night clock, notifications still shown) or "off" (screen off)

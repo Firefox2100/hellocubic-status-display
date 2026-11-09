@@ -150,6 +150,10 @@ auto ConfigManager::load() -> bool {
         this->ui.codexWeeklyHero = readBool(uiCfg[F("codex_weekly_hero")], ui.codexWeeklyHero);
         this->ui.tlsVerify = readBool(uiCfg[F("tls_verify")], ui.tlsVerify);
         loadNight(uiCfg, this->ui);
+        const int dayPct = uiCfg[F("brightness")] | static_cast<int>(this->ui.brightness);
+        if (dayPct >= NightCore::BRIGHTNESS_MIN && dayPct <= NightCore::BRIGHTNESS_MAX) {
+            this->ui.brightness = static_cast<uint8_t>(dayPct);
+        }
         this->ui.showWeather = readBool(uiCfg[F("show_weather")], ui.showWeather);
         this->ui.useFahrenheit = readBool(uiCfg[F("fahrenheit")], ui.useFahrenheit);
         this->ui.weatherLat = uiCfg[F("weather_lat")] | ui.weatherLat;
@@ -317,6 +321,7 @@ auto ConfigManager::save() -> bool {
     doc["ui"][F("codex_weekly_hero")] = ui.codexWeeklyHero;
     doc["ui"][F("tls_verify")] = ui.tlsVerify;
     saveNight(doc["ui"], ui);
+    doc["ui"][F("brightness")] = ui.brightness;
     doc["ui"][F("show_weather")] = ui.showWeather;
     doc["ui"][F("fahrenheit")] = ui.useFahrenheit;
     doc["ui"][F("weather_lat")] = ui.weatherLat;
