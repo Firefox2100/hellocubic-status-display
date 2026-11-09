@@ -26,11 +26,22 @@ bool chNightEnabled(const ChannelCtx&) {
 
 static void geom(int& hhX, int& colonX, int& mmX, int& digitW) {
     Display::useFont("VT323-86");
-    digitW = tft.textWidth("0");
-    int colonW = tft.textWidth(":");
+    digitW = tft.textWidth("00") - tft.textWidth("0");   // advance, not the right edge of one glyph
+    int colonW = tft.textWidth("::") - tft.textWidth(":");
     hhX = (SCREEN_W - (digitW * 4 + colonW)) / 2;
     colonX = hhX + digitW * 2;
     mmX = colonX + colonW;
+}
+
+static bool s_colonOn = true;
+
+static void paintColonOnly(bool on) {
+    int hhX, colonX, mmX, dw;
+    geom(hhX, colonX, mmX, dw);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(on ? Theme::MUTED : Theme::BG, Theme::BG);
+    tft.drawString(":", colonX, kClockY);
+    s_colonOn = on;
 }
 
 static void paintTime(int hh, int mm, bool h24, bool hoursToo) {
@@ -43,8 +54,7 @@ static void paintTime(int hh, int mm, bool h24, bool hoursToo) {
         ClockFmt::hourField(hh, h24, b, sizeof(b));
         tft.setTextColor(Theme::INK_DIM, Theme::BG);
         tft.drawString(b, hhX, kClockY);
-        tft.setTextColor(Theme::MUTED, Theme::BG);
-        tft.drawString(":", colonX, kClockY);
+        paintColonOnly(s_colonOn);
     }
     tft.fillRect(mmX, kClockY, dw * 2, 86, Theme::BG);
     snprintf(b, sizeof(b), "%02d", mm);
@@ -69,6 +79,7 @@ void chNightDraw(const ChannelCtx& ctx) {
     time_t now = time(nullptr);
     struct tm tmv; localtime_r(&now, &tmv);
     const bool h24 = ctx.settings->clock24h;
+    s_colonOn = (tmv.tm_sec % 2) == 0;
     paintTime(tmv.tm_hour, tmv.tm_min, h24, true);
     paintDate(tmv, h24);
     s_hh = tmv.tm_hour; s_mm = tmv.tm_min; s_day = tmv.tm_yday;
@@ -77,6 +88,8 @@ void chNightDraw(const ChannelCtx& ctx) {
 void chNightTick(const ChannelCtx& ctx) {
     time_t now = time(nullptr);
     struct tm tmv; localtime_r(&now, &tmv);
+    const bool colonOn = (tmv.tm_sec % 2) == 0;
+    if (colonOn != s_colonOn) paintColonOnly(colonOn);
     if (tmv.tm_min == s_mm) return;
     const bool h24 = ctx.settings->clock24h;
     paintTime(tmv.tm_hour, tmv.tm_min, h24, tmv.tm_hour != s_hh);

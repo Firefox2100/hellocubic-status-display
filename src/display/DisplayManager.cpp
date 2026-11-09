@@ -27,6 +27,7 @@
 #include "config/ConfigManager.h"
 #include "display/CgfPlayer.h"
 #include "display/Gif.h"
+#include "display.h"
 
 static Gif* g_gif = nullptr;
 
@@ -605,6 +606,9 @@ auto DisplayManager::setRotation(uint8_t rotation) -> void {
  */
 void DisplayManager::drawTextWrapped(int16_t xPos, int16_t yPos, const String& text, uint8_t textSize, uint16_t fgColor,
                                      uint16_t bgColor, bool clearBg) {
+    // This helper draws with the built-in bitmap font. A VLW font left loaded by a page (the clock's 86 px
+    // digits) would make the text huge and ignore its size, so drop it first.
+    Display::releaseFont();
     lcdDrawTextWrapped(xPos, yPos, text, textSize, fgColor, bgColor, clearBg);
 }
 

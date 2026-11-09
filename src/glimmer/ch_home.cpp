@@ -54,8 +54,8 @@ bool chHomeEnabled(const ChannelCtx& ctx) {
 static void clockGeom() {
     if (s_geomReady) return;
     Display::useFont("VT323-86");
-    s_digitW = tft.textWidth("0");
-    int colonW = tft.textWidth(":");
+    s_digitW = tft.textWidth("00") - tft.textWidth("0");   // advance, not the right edge of one glyph
+    int colonW = tft.textWidth("::") - tft.textWidth(":");
     s_hhX = 8;
     s_colonX = s_hhX + s_digitW * 2;
     s_mmX = s_colonX + colonW;
@@ -74,12 +74,16 @@ static void paintHH(int hh, bool h24) {
     tft.drawString(b, s_hhX, 6);
 }
 
-static void paintColon() {
+static bool s_colonOn = true;   // blinks 1 s on / 1 s off, so a frozen screen is obvious
+
+static void paintColon(bool on = true) {
     clockGeom();
     Display::useFont("VT323-86");
     tft.setTextDatum(TL_DATUM);
-    tft.setTextColor(Theme::CORAL, Theme::BG);
+    // Opaque text repaints the whole glyph cell, so "off" is the same glyph in the background colour.
+    tft.setTextColor(on ? Theme::CORAL : Theme::BG, Theme::BG);
     tft.drawString(":", s_colonX, 6);
+    s_colonOn = on;
 }
 
 static void paintMM(int mm) {
@@ -275,17 +279,18 @@ void chHomeDraw(const ChannelCtx& ctx) {
     time_t now = time(nullptr);
     struct tm tmv; localtime_r(&now, &tmv);
 
-    // Hero clock
-    paintHH(tmv.tm_hour, ctx.settings->clock24h);
-    paintColon();
-    paintMM(tmv.tm_min);
-
-    // Weather column
+    // Weather column first: its cleared boxes reach into the corner of the last minute digit, so the
+    // clock is painted on top of them (the other order left that corner blank until the next minute).
     const WeatherData* w = &Weather::snapshot();
     bool f = ctx.settings && ctx.settings->useFahrenheit;
     paintWeatherTemp(w, f);
     paintWeatherFeels(w, f);
     paintWeatherCondition(w);
+
+    // Hero clock
+    paintHH(tmv.tm_hour, ctx.settings->clock24h);
+    paintColon((tmv.tm_sec % 2) == 0);
+    paintMM(tmv.tm_min);
 
     // Date row (static-ish, only changes day-over-day)
     char dateBuf[24];
@@ -345,6 +350,8 @@ void chHomeTick(const ChannelCtx& ctx) {
     struct tm tmv; localtime_r(&now, &tmv);
 
     // Clock
+    const bool colonOn = (tmv.tm_sec % 2) == 0;
+    if (colonOn != s_colonOn) paintColon(colonOn);
     if (tmv.tm_min != s_mm) { paintMM(tmv.tm_min); s_mm = tmv.tm_min; }
     if (tmv.tm_hour != s_hh) { paintHH(tmv.tm_hour, ctx.settings->clock24h); s_hh = tmv.tm_hour; }
     if (tmv.tm_min != s_rainMin) {
@@ -364,10 +371,12 @@ void chHomeTick(const ChannelCtx& ctx) {
         if (fabsf(w->tempC - s_tempC) > 0.4f) {
             paintWeatherTemp(w, f);
             paintWeatherFeels(w, f);
+            paintMM(tmv.tm_min);          // the feels-like box overlaps the last digit's corner
             s_tempC = w->tempC;
         }
         if (w->code != s_code) {
             paintWeatherCondition(w);
+            paintMM(tmv.tm_min);          // the condition box overlaps the last digit's corner
             s_code = w->code;
         }
     }
